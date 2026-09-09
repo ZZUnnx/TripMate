@@ -1,0 +1,26 @@
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Java / Spring
+.gradle/
+target/
+out/
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Environment / Secrets
+.env
+application-secret.yml
+application-local.yml
+
+# OS
+.DS_Store
+Thumbs.db

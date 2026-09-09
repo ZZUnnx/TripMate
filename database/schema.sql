@@ -1,0 +1,11 @@
+-- TripMate database schema
+-- 실제 Entity 설계 후 테이블 정의를 추가하세요.
+
+-- 예상 테이블
+-- users
+-- trips
+-- trip_members
+-- chat_rooms
+-- chat_messages
+-- schedule_candidates
+-- schedules
