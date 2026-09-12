@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'screens/app_shell.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/signup_screen.dart';
 
 export 'screens/chat/chat_screen.dart';
 export 'screens/calendar/calendar_screen.dart';
@@ -25,7 +27,13 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFFBFBFD),
         useMaterial3: true,
       ),
+      
       home: const AppShell(),
+
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+      },
     );
   }
 }

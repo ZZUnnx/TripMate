@@ -5,12 +5,14 @@ import '../common/responsive.dart';
 // 상단 헤더: 프로필 사진, 이름 영역, 설정 버튼
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
-    this.name = '홍길동',
+    this.isLoggedIn = false,
+    this.name,
     this.subtitle = '즐거운 여행을 준비해볼까요?',
     super.key,
   });
 
-  final String name;
+  final bool isLoggedIn;
+  final String? name;
   final String subtitle;
 
   @override
@@ -40,8 +42,9 @@ class HomeHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
+              if (isLoggedIn)
+               Text(
+                name ?? '',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -49,18 +52,41 @@ class HomeHeader extends StatelessWidget {
                   fontSize: context.rs(35),
                   fontWeight: FontWeight.w700,
                 ),
-              ),
+               )
+               else
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/login');
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: const Color(0xFF121827),
+                  ),
+                  child: Text(
+                    '로그인하세요',
+                    style: TextStyle(
+                      fontSize: context.rs(28),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+
               const ResponsiveGap(height: 6),
+
               Text(
-                subtitle,
+                isLoggedIn
+                    ? subtitle
+                    : '로그인하고 여행을 시작해보세요',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: const Color(0xFF7C83A0),
                   fontSize: context.rs(14),
                   fontWeight: FontWeight.w500,
-                ),
-              ),
+                )
+              )
             ],
           ),
         ),
