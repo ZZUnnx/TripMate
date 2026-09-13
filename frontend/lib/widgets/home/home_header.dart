@@ -96,12 +96,30 @@ class HomeHeader extends StatelessWidget {
           ),
         ),
 
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.settings_outlined),
-          color: const Color(0xFF121827),
+        PopupMenuButton<String>(
+          icon: const Icon(
+            Icons.settings_outlined,
+            color: Color(0xFF121827),
+          ),
           iconSize: context.rs(32),
-          tooltip: '',
+          onSelected: (value) {
+            if (value == 'logout') {
+              context.read<AuthProvider>().logout();
+            }
+          },
+
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: [
+                  Icon(Icons.logout),
+                  SizedBox(width: 10),
+                  Text('로그아웃'),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
