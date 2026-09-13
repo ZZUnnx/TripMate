@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -102,8 +103,58 @@ class _SignupScreenState extends State<SignupScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // 나중에 Spring Boot 회원가입 API 연결
+                  onPressed: () async {
+                    final email = emailController.text.trim();
+                    final nickname = nicknameController.text.trim();
+                    final password = passwordController.text;
+                    final passwordCheck = passwordCheckController.text;
+
+                    if (email.isEmpty ||
+                        nickname.isEmpty ||
+                        password.isEmpty ||
+                        passwordCheck.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('모든 항목을 입력해주세요.'),
+                            ),
+                          );
+                          return;
+                        }
+
+                    if (password != passwordCheck) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('비밀번호가 일치하지 않습니다.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await AuthService.signup(
+                        email: email,
+                        password: password,
+                        nickname: nickname,
+                      );
+
+                      if (!context.mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('회원가입이 완료되었습니다.'),
+                        ),
+                      );
+
+                      Navigator.pop(context);
+                    } catch (e) {
+                      if (!context.mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('회원가입 실패: $e'),
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF635BFF),

@@ -1,7 +1,76 @@
 import 'package:flutter/material.dart';
 
-class LoginScreen extends StatelessWidget {
+import '../../services/auth_service.dart';
+
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  bool isLoading = false;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+
+    final email = emailController.text.trim();
+    final password = passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('이메일과 비밀번호를 입력해주세요.'),
+        ),
+      );
+
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+
+      final user = await AuthService.login(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      context.read<AuthProvider>().login(
+        userId: user['id'],
+        email: user['email'],
+        nickname: user['nickname'],
+      );
+      Navigator.pop(context);
+    } catch (e) {
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('로그인 실패: $e'),
+        ),
+      );
+    } 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +114,8 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 40),
 
               TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: '이메일',
                   hintText: 'example@email.com',
@@ -60,7 +131,9 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               TextField(
+                controller: passwordController,
                 obscureText: true,
+                onSubmitted: (_) => _login(),
                 decoration: InputDecoration(
                   labelText: '비밀번호',
                   filled: true,
@@ -78,9 +151,7 @@ class LoginScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // 나중에 로그인 API 연결
-                  },
+                  onPressed: isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF635BFF),
                     foregroundColor: Colors.white,
@@ -88,13 +159,22 @@ class LoginScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text(
-                    '로그인',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          '로그인',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
 

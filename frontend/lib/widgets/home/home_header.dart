@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../common/responsive.dart';
+import '../../providers/auth_provider.dart';
 
 // 상단 헤더: 프로필 사진, 이름 영역, 설정 버튼
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
-    this.isLoggedIn = false,
-    this.name,
     this.subtitle = '즐거운 여행을 준비해볼까요?',
     super.key,
   });
 
-  final bool isLoggedIn;
-  final String? name;
   final String subtitle;
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
     return Row(
       children: [
         // 프로필 사진
@@ -28,7 +28,10 @@ class HomeHeader extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFE8E4FF), Color(0xFFDCEAFD)],
+              colors: [
+                Color(0xFFE8E4FF),
+                Color(0xFFDCEAFD),
+              ],
             ),
           ),
           child: const ResponsiveIcon(
@@ -37,23 +40,25 @@ class HomeHeader extends StatelessWidget {
             size: 28,
           ),
         ),
+
         const ResponsiveGap(width: 14),
+
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isLoggedIn)
-               Text(
-                name ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: const Color(0xFF121827),
-                  fontSize: context.rs(35),
-                  fontWeight: FontWeight.w700,
-                ),
-               )
-               else
+              if (auth.isLoggedIn)
+                Text(
+                  auth.nickname ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF121827),
+                    fontSize: context.rs(35),
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              else
                 TextButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/login');
@@ -76,7 +81,7 @@ class HomeHeader extends StatelessWidget {
               const ResponsiveGap(height: 6),
 
               Text(
-                isLoggedIn
+                auth.isLoggedIn
                     ? subtitle
                     : '로그인하고 여행을 시작해보세요',
                 maxLines: 1,
@@ -85,11 +90,12 @@ class HomeHeader extends StatelessWidget {
                   color: const Color(0xFF7C83A0),
                   fontSize: context.rs(14),
                   fontWeight: FontWeight.w500,
-                )
-              )
+                ),
+              ),
             ],
           ),
         ),
+
         IconButton(
           onPressed: () {},
           icon: const Icon(Icons.settings_outlined),
