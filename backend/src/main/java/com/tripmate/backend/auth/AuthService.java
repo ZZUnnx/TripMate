@@ -13,13 +13,16 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     public AuthService(
         UserRepository userRepository,
-        PasswordEncoder passwordEncoder
+        PasswordEncoder passwordEncoder,
+        JwtUtil jwtUtil
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
     }
 
     public void signup(SignupRequest request) {
@@ -52,11 +55,18 @@ public class AuthService {
                     "이메일 또는 비밀번호가 올바르지 않습니다."
             );
         }
+        
+        String accessToken = jwtUtil.generateToken(
+            user.getId(),
+            user.getEmail(),
+            user.getNickname()
+        );
     
         return new LoginResponse(
                 user.getId(),
                 user.getEmail(),
-                user.getNickname()
+                user.getNickname(),
+                accessToken
         );
     }
 }

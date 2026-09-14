@@ -15,7 +15,7 @@ export 'screens/settlement/settlement_screen.dart';
 void main() {
   runApp(
     ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+      create: (_) => AuthProvider()..loadLoginState(),
       child: const MyApp(),
     ),
   );

@@ -3,6 +3,7 @@ package com.tripmate.backend.auth.dto;
 public record LoginResponse(
     Long id,
     String email,
-    String nickname
+    String nickname,
+    String accessToken
 ) {
 }

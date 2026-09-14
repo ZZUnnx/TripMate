@@ -58,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         userId: user['id'],
         email: user['email'],
         nickname: user['nickname'],
+        accessToken: user['accessToken'],
       );
       Navigator.pop(context);
     } catch (e) {

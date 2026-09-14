@@ -102,9 +102,9 @@ class HomeHeader extends StatelessWidget {
             color: Color(0xFF121827),
           ),
           iconSize: context.rs(32),
-          onSelected: (value) {
+          onSelected: (value) async {
             if (value == 'logout') {
-              context.read<AuthProvider>().logout();
+              await context.read<AuthProvider>().logout();
             }
           },
 
