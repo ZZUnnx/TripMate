@@ -29,21 +29,29 @@ public class ChatMessage {
     private User sender;
 
     // 채팅 내용
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "message_type", nullable = false, length = 20)
+    private String messageType = "TEXT";
+
     // 메시지를 보낸 시간
-    @Column(nullable = false)
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime sentAt;
 
     public ChatMessage(Trip trip, User sender, String content) {
         this.trip = trip;
         this.sender = sender;
         this.content = content;
+        this.messageType = "TEXT";
     }
 
     @PrePersist
     public void prePersist() {
+        if (this.messageType == null) {
+            this.messageType = "TEXT";
+        }
+
         this.sentAt = LocalDateTime.now();
     }
 }
