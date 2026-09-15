@@ -42,6 +42,8 @@ Authorization: Bearer {accessToken}
 | Trip | `GET` | `/api/trips/{tripId}` | 예정 |
 | Trip Member | `POST` | `/api/trips/{tripId}/members` | 예정 |
 | Chat | `GET` | `/api/chat/rooms` | 구현됨 |
+| Chat | `GET` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
+| Chat | `POST` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
 | Chat | WebSocket | `/ws/chat` | 예정 |
 | Schedule Candidate | `GET` | `/api/trips/{tripId}/schedule-candidates` | 예정 |
 | Schedule Candidate | `PATCH` | `/api/schedule-candidates/{candidateId}/approve` | 예정 |
@@ -323,6 +325,9 @@ Authorization: Bearer {accessToken}
     "tripId": 1,
     "title": "부산 여행",
     "destination": "부산",
+    "startDate": "2026-10-01",
+    "endDate": "2026-10-03",
+    "memberCount": 4,
     "lastMessage": "내일 오전에 해운대 갈까?",
     "lastSenderNickname": "여행자",
     "lastMessageAt": "2026-09-14T18:30:00",
@@ -338,6 +343,79 @@ Authorization: Bearer {accessToken}
 | Status | 상황 |
 | --- | --- |
 | `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+
+### 채팅 메시지 목록 조회
+
+```http
+GET /api/chat/rooms/{tripId}/messages
+Authorization: Bearer {accessToken}
+```
+
+현재 사용자가 접근 가능한 여행방의 채팅 메시지를 오래된 순서로 조회한다.
+
+#### Response Example
+
+```json
+[
+  {
+    "id": 1,
+    "tripId": 1,
+    "senderId": 2,
+    "senderNickname": "민수",
+    "content": "렌터카 예약했어.",
+    "sentAt": "2026-09-15T10:12:00",
+    "mine": false
+  }
+]
+```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+| `404 Not Found` | 채팅방이 없거나 접근 권한이 없음 |
+
+### 채팅 메시지 전송
+
+```http
+POST /api/chat/rooms/{tripId}/messages
+Authorization: Bearer {accessToken}
+```
+
+#### Request Body
+
+```json
+{
+  "content": "좋아, 그럼 12시에 만나자."
+}
+```
+
+#### Response Example
+
+```http
+201 Created
+```
+
+```json
+{
+  "id": 2,
+  "tripId": 1,
+  "senderId": 1,
+  "senderNickname": "여행자",
+  "content": "좋아, 그럼 12시에 만나자.",
+  "sentAt": "2026-09-15T10:17:00",
+  "mine": true
+}
+```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `400 Bad Request` | 메시지 누락 또는 길이 초과 |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+| `404 Not Found` | 채팅방이 없거나 접근 권한이 없음 |
 
 ### 채팅 연결
 
