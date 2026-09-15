@@ -40,7 +40,8 @@ Authorization: Bearer {accessToken}
 | Trip | `POST` | `/api/trips` | 구현됨 |
 | Trip | `GET` | `/api/trips` | 예정 |
 | Trip | `GET` | `/api/trips/{tripId}` | 예정 |
-| Trip Member | `POST` | `/api/trips/{tripId}/members` | 예정 |
+| Trip Member | `GET` | `/api/trips/{tripId}/members` | 구현됨 |
+| Trip Member | `POST` | `/api/trips/{tripId}/members` | 구현됨 |
 | Chat | `GET` | `/api/chat/rooms` | 구현됨 |
 | Chat | `GET` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
 | Chat | `POST` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
@@ -290,6 +291,45 @@ Authorization: Bearer {accessToken}
 
 ## Trip Member
 
+### 여행 멤버 목록 조회
+
+```http
+GET /api/trips/{tripId}/members
+Authorization: Bearer {accessToken}
+```
+
+현재 사용자가 접근 가능한 여행방의 생성자와 참여 멤버를 조회한다.
+
+#### Response Example
+
+```json
+[
+  {
+    "userId": 1,
+    "email": "owner@example.com",
+    "nickname": "여행자",
+    "role": "OWNER",
+    "owner": true,
+    "joinedAt": "2026-09-15T10:00:00"
+  },
+  {
+    "userId": 2,
+    "email": "member@example.com",
+    "nickname": "민수",
+    "role": "MEMBER",
+    "owner": false,
+    "joinedAt": "2026-09-15T10:05:00"
+  }
+]
+```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+| `404 Not Found` | 여행방이 없거나 접근 권한이 없음 |
+
 ### 여행 멤버 추가
 
 ```http
@@ -305,6 +345,31 @@ Authorization: Bearer {accessToken}
   "role": "MEMBER"
 }
 ```
+
+#### Response Example
+
+```http
+201 Created
+```
+
+```json
+{
+  "userId": 2,
+  "email": "member@example.com",
+  "nickname": "민수",
+  "role": "MEMBER",
+  "owner": false,
+  "joinedAt": "2026-09-15T10:05:00"
+}
+```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `400 Bad Request` | 이메일 형식 오류, 이미 참여 중인 사용자, 여행방 생성자 초대 |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+| `404 Not Found` | 여행방이 없거나 접근 권한이 없음, 초대할 사용자가 없음 |
 
 ## Chat
 

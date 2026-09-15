@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/chat_message.dart';
 import '../models/chat_room.dart';
+import '../models/trip_member.dart';
 import 'auth_service.dart';
 
 class ChatService {
@@ -128,6 +129,61 @@ class ChatService {
     }
 
     throw Exception('메시지를 보내지 못했습니다. (${response.statusCode})');
+  }
+
+  static Future<List<TripMember>> fetchMembers({
+    required String accessToken,
+    required int tripId,
+  }) async {
+    final response = await http.get(
+      Uri.parse('${AuthService.baseUrl}/api/trips/$tripId/members'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+
+      if (body is List) {
+        return body
+            .map((item) => TripMember.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+
+      throw const FormatException('멤버 목록 응답 형식이 올바르지 않습니다.');
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    throw Exception('멤버 목록을 불러오지 못했습니다. (${response.statusCode})');
+  }
+
+  static Future<TripMember> inviteMember({
+    required String accessToken,
+    required int tripId,
+    required String email,
+  }) async {
+    final response = await http.post(
+      Uri.parse('${AuthService.baseUrl}/api/trips/$tripId/members'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'email': email, 'role': 'MEMBER'}),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return TripMember.fromJson(
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+      );
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    throw Exception('멤버를 초대하지 못했습니다. (${response.statusCode})');
   }
 
   static String _formatDate(DateTime date) {

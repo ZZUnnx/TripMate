@@ -36,6 +36,12 @@ public class TripMember {
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 
+    public TripMember(Trip trip, User user, String role) {
+        this.trip = trip;
+        this.user = user;
+        this.role = role;
+    }
+
     @PrePersist
     public void prePersist() {
         this.joinedAt = LocalDateTime.now();

@@ -1,8 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/chat_message.dart';
 import '../../models/chat_room.dart';
+import '../../models/trip_member.dart';
 import '../../services/chat_service.dart';
 import '../../widgets/chat/chat_avatars.dart';
 import '../../widgets/common/responsive.dart';
@@ -26,13 +29,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _scrollController = ScrollController();
 
   late Future<List<ChatMessage>> _messagesFuture;
+  late Future<List<TripMember>> _membersFuture;
   List<ChatMessage> _messages = const [];
   bool _isSending = false;
+  bool _isRoomMenuOpen = false;
 
   @override
   void initState() {
     super.initState();
     _messagesFuture = _loadMessages();
+    _membersFuture = _loadMembers();
   }
 
   @override
@@ -52,6 +58,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _scrollToBottomSoon();
 
     return messages;
+  }
+
+  Future<List<TripMember>> _loadMembers() {
+    return ChatService.fetchMembers(
+      accessToken: widget.accessToken,
+      tripId: widget.room.tripId,
+    );
   }
 
   Future<void> _sendMessage() async {
@@ -131,6 +144,61 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  void _openRoomMenu() {
+    setState(() {
+      _membersFuture = _loadMembers();
+      _isRoomMenuOpen = true;
+    });
+  }
+
+  void _closeRoomMenu() {
+    setState(() {
+      _isRoomMenuOpen = false;
+    });
+  }
+
+  Future<void> _inviteMember() async {
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => const _InviteMemberDialog(),
+    );
+
+    if (!mounted || email == null || email.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await ChatService.inviteMember(
+        accessToken: widget.accessToken,
+        tripId: widget.room.tripId,
+        email: email.trim(),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _membersFuture = _loadMembers();
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('멤버를 초대했습니다.')));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  void _showPreparingMessage(String label) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$label 기능은 준비 중입니다.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -150,19 +218,42 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 child: Center(
                   child: SizedBox(
                     width: contentWidth,
-                    child: Column(
+                    child: Stack(
                       children: [
-                        _ChatDetailHeader(
-                          room: widget.room,
-                          onBack: () => Navigator.pop(context),
-                          onAiSummaryTap: _openAiSummarySheet,
+                        Column(
+                          children: [
+                            _ChatDetailHeader(
+                              room: widget.room,
+                              onBack: () => Navigator.pop(context),
+                              onAiSummaryTap: _openAiSummarySheet,
+                              onMenuTap: _openRoomMenu,
+                            ),
+                            Expanded(child: _buildMessageArea()),
+                            _MessageComposer(
+                              controller: _messageController,
+                              isSending: _isSending,
+                              onSend: _sendMessage,
+                            ),
+                          ],
                         ),
-                        Expanded(child: _buildMessageArea()),
-                        _MessageComposer(
-                          controller: _messageController,
-                          isSending: _isSending,
-                          onSend: _sendMessage,
-                        ),
+                        if (_isRoomMenuOpen)
+                          _RoomSideMenu(
+                            membersFuture: _membersFuture,
+                            onClose: _closeRoomMenu,
+                            onInvite: _inviteMember,
+                            onScheduleSummary: () {
+                              _closeRoomMenu();
+                              _openAiSummarySheet();
+                            },
+                            onSettlement: () {
+                              _closeRoomMenu();
+                              _showPreparingMessage('여행 정산');
+                            },
+                            onFiles: () {
+                              _closeRoomMenu();
+                              _showPreparingMessage('사진 / 파일');
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -224,11 +315,13 @@ class _ChatDetailHeader extends StatelessWidget {
     required this.room,
     required this.onBack,
     required this.onAiSummaryTap,
+    required this.onMenuTap,
   });
 
   final ChatRoom room;
   final VoidCallback onBack;
   final VoidCallback onAiSummaryTap;
+  final VoidCallback onMenuTap;
 
   @override
   Widget build(BuildContext context) {
@@ -274,7 +367,7 @@ class _ChatDetailHeader extends StatelessWidget {
           const ResponsiveGap(width: 8),
           _AiSummaryButton(onTap: onAiSummaryTap),
           IconButton(
-            onPressed: () {},
+            onPressed: onMenuTap,
             icon: const Icon(Icons.more_vert_rounded),
           ),
         ],
@@ -313,6 +406,292 @@ class _ChatDetailHeader extends StatelessWidget {
     }
 
     return 'D+${difference.abs()}';
+  }
+}
+
+class _RoomSideMenu extends StatelessWidget {
+  const _RoomSideMenu({
+    required this.membersFuture,
+    required this.onClose,
+    required this.onInvite,
+    required this.onScheduleSummary,
+    required this.onSettlement,
+    required this.onFiles,
+  });
+
+  final Future<List<TripMember>> membersFuture;
+  final VoidCallback onClose;
+  final VoidCallback onInvite;
+  final VoidCallback onScheduleSummary;
+  final VoidCallback onSettlement;
+  final VoidCallback onFiles;
+
+  @override
+  Widget build(BuildContext context) {
+    final menuWidth = context.rs(250);
+
+    return Positioned.fill(
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(color: Colors.black.withValues(alpha: 0.18)),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: menuWidth,
+            color: Colors.white,
+            child: SafeArea(
+              left: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _RoomMenuAction(
+                    icon: Icons.check_rounded,
+                    label: '일정 요약',
+                    onTap: onScheduleSummary,
+                  ),
+                  _RoomMenuAction(
+                    icon: Icons.alternate_email_rounded,
+                    label: '여행 정산',
+                    onTap: onSettlement,
+                  ),
+                  _RoomMenuAction(
+                    icon: Icons.image_outlined,
+                    label: '사진 / 파일',
+                    onTap: onFiles,
+                  ),
+                  Container(
+                    height: context.rs(8),
+                    color: const Color(0xFFE8E8EC),
+                  ),
+                  Expanded(
+                    child: FutureBuilder<List<TripMember>>(
+                      future: membersFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF635BFF),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: context.symmetricInsets(horizontal: 18),
+                              child: Text(
+                                '멤버 목록을 불러오지 못했습니다.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: const Color(0xFF707891),
+                                  fontSize: context.rs(14),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final members = snapshot.data ?? const <TripMember>[];
+
+                        return ListView.separated(
+                          padding: EdgeInsets.zero,
+                          itemBuilder: (context, index) {
+                            return _RoomMemberTile(member: members[index]);
+                          },
+                          separatorBuilder: (context, index) {
+                            return const Divider(height: 1);
+                          },
+                          itemCount: members.length,
+                        );
+                      },
+                    ),
+                  ),
+                  _InviteMemberButton(onTap: onInvite),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomMenuAction extends StatelessWidget {
+  const _RoomMenuAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: context.insetsFromLTRB(18, 16, 18, 16),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF121827), size: context.rs(24)),
+            const ResponsiveGap(width: 16),
+            Text(
+              label,
+              style: TextStyle(
+                color: const Color(0xFF121827),
+                fontSize: context.rs(15),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomMemberTile extends StatelessWidget {
+  const _RoomMemberTile({required this.member});
+
+  final TripMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: context.insetsFromLTRB(14, 10, 12, 10),
+      child: Row(
+        children: [
+          _MemberAvatar(name: member.nickname),
+          const ResponsiveGap(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.nickname,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF121827),
+                    fontSize: context.rs(14),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  member.owner ? 'Owner' : member.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF858CA2),
+                    fontSize: context.rs(11),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteMemberButton extends StatelessWidget {
+  const _InviteMemberButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFE1E1E6),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: context.insetsFromLTRB(16, 14, 16, 18),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: context.rs(18),
+                backgroundColor: const Color(0xFF767B86),
+                child: Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: Colors.white,
+                  size: context.rs(19),
+                ),
+              ),
+              const ResponsiveGap(width: 10),
+              Text(
+                '+ 초대',
+                style: TextStyle(
+                  color: const Color(0xFF121827),
+                  fontSize: context.rs(14),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteMemberDialog extends StatefulWidget {
+  const _InviteMemberDialog();
+
+  @override
+  State<_InviteMemberDialog> createState() => _InviteMemberDialogState();
+}
+
+class _InviteMemberDialogState extends State<_InviteMemberDialog> {
+  final _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('멤버 초대'),
+      content: TextField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        decoration: const InputDecoration(
+          labelText: '이메일',
+          hintText: 'member@example.com',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(context, _emailController.text.trim());
+          },
+          child: const Text('초대'),
+        ),
+      ],
+    );
   }
 }
 
@@ -865,6 +1244,30 @@ class _PersonBubbleAvatar extends StatelessWidget {
         initial,
         style: TextStyle(
           color: const Color(0xFF4B5470),
+          fontSize: context.rs(15),
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberAvatar extends StatelessWidget {
+  const _MemberAvatar({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.isEmpty ? '?' : name.substring(0, 1);
+
+    return CircleAvatar(
+      radius: context.rs(22),
+      backgroundColor: const Color(0xFFE5E2D5),
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: const Color(0xFF4E5148),
           fontSize: context.rs(15),
           fontWeight: FontWeight.w900,
         ),
