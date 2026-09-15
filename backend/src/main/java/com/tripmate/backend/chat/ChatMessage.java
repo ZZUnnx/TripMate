@@ -36,6 +36,12 @@ public class ChatMessage {
     @Column(nullable = false)
     private LocalDateTime sentAt;
 
+    public ChatMessage(Trip trip, User sender, String content) {
+        this.trip = trip;
+        this.sender = sender;
+        this.content = content;
+    }
+
     @PrePersist
     public void prePersist() {
         this.sentAt = LocalDateTime.now();

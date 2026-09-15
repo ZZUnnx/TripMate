@@ -5,7 +5,10 @@ class ChatRoom {
     required this.unreadCount,
     required this.pinned,
     required this.aiSummaryAvailable,
+    required this.memberCount,
     this.destination,
+    this.startDate,
+    this.endDate,
     this.lastMessage,
     this.lastSenderNickname,
     this.lastMessageAt,
@@ -14,6 +17,9 @@ class ChatRoom {
   final int tripId;
   final String title;
   final String? destination;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int memberCount;
   final String? lastMessage;
   final String? lastSenderNickname;
   final DateTime? lastMessageAt;
@@ -26,6 +32,9 @@ class ChatRoom {
       tripId: _readInt(json['tripId'], 'tripId'),
       title: _readString(json['title'], 'title'),
       destination: _readNullableString(json['destination']),
+      startDate: _readDateTime(json['startDate']),
+      endDate: _readDateTime(json['endDate']),
+      memberCount: _readInt(json['memberCount'] ?? 1, 'memberCount'),
       lastMessage: _readNullableString(json['lastMessage']),
       lastSenderNickname: _readNullableString(json['lastSenderNickname']),
       lastMessageAt: _readDateTime(json['lastMessageAt']),

@@ -12,6 +12,7 @@ class ChatRoomCard extends StatelessWidget {
     this.badgeText,
     this.unreadCount,
     this.isPinned = false,
+    this.onTap,
     super.key,
   });
 
@@ -22,65 +23,69 @@ class ChatRoomCard extends StatelessWidget {
   final String? badgeText;
   final int? unreadCount;
   final bool isPinned;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: context.rs(80)),
-      padding: context.symmetricInsets(horizontal: 14, vertical: 12),
-      decoration: cardDecoration(context),
-      child: Row(
-        children: [
-          avatar,
-          const ResponsiveGap(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFF060914),
-                          fontSize: context.rs(16),
-                          fontWeight: FontWeight.w900,
-                          height: 1.05,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: BoxConstraints(minHeight: context.rs(80)),
+        padding: context.symmetricInsets(horizontal: 14, vertical: 12),
+        decoration: cardDecoration(context),
+        child: Row(
+          children: [
+            avatar,
+            const ResponsiveGap(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF060914),
+                            fontSize: context.rs(16),
+                            fontWeight: FontWeight.w900,
+                            height: 1.05,
+                          ),
                         ),
                       ),
-                    ),
-                    if (badgeText != null) ...[
-                      const ResponsiveGap(width: 8),
-                      _AiBadge(text: badgeText!),
+                      if (badgeText != null) ...[
+                        const ResponsiveGap(width: 8),
+                        _AiBadge(text: badgeText!),
+                      ],
                     ],
-                  ],
-                ),
-                const ResponsiveGap(height: 8),
-                Text(
-                  message,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF76809A),
-                    fontSize: context.rs(14),
-                    fontWeight: FontWeight.w700,
-                    height: 1,
                   ),
-                ),
-              ],
+                  const ResponsiveGap(height: 8),
+                  Text(
+                    message,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF76809A),
+                      fontSize: context.rs(14),
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const ResponsiveGap(width: 8),
-          _ChatTrailing(
-            time: time,
-            unreadCount: unreadCount,
-            isPinned: isPinned,
-          ),
-        ],
+            const ResponsiveGap(width: 8),
+            _ChatTrailing(
+              time: time,
+              unreadCount: unreadCount,
+              isPinned: isPinned,
+            ),
+          ],
+        ),
       ),
     );
   }

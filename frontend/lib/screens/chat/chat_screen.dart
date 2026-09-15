@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/chat_room.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/chat_service.dart';
+import 'chat_detail_screen.dart';
 import '../../widgets/chat/chat_avatars.dart';
 import '../../widgets/chat/chat_header.dart';
 import '../../widgets/chat/chat_room_card.dart';
@@ -269,11 +270,29 @@ class _ChatRoomListState extends State<_ChatRoomList> {
           unreadCount: room.unreadCount > 0 ? room.unreadCount : null,
           isPinned: room.pinned,
           avatar: _avatarFor(room),
+          onTap: () => _openChatRoom(room),
         ),
       );
     }
 
     return children;
+  }
+
+  Future<void> _openChatRoom(ChatRoom room) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) {
+          return ChatDetailScreen(room: room, accessToken: widget.accessToken);
+        },
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    _retry();
   }
 
   String _previewMessage(ChatRoom room) {
