@@ -37,7 +37,7 @@ Authorization: Bearer {accessToken}
 | Auth | `POST` | `/api/auth/signup` | 구현됨 |
 | Auth | `POST` | `/api/auth/login` | 구현됨 |
 | AI | `GET` | `/api/ai/test` | 구현됨 |
-| Trip | `POST` | `/api/trips` | 예정 |
+| Trip | `POST` | `/api/trips` | 구현됨 |
 | Trip | `GET` | `/api/trips` | 예정 |
 | Trip | `GET` | `/api/trips/{tripId}` | 예정 |
 | Trip Member | `POST` | `/api/trips/{tripId}/members` | 예정 |
@@ -225,7 +225,18 @@ Authorization: Bearer {accessToken}
 }
 ```
 
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `title` | `string` | O | 여행방 이름 |
+| `destination` | `string` | X | 여행지 |
+| `startDate` | `string` | X | 여행 시작일, `yyyy-MM-dd` |
+| `endDate` | `string` | X | 여행 종료일, `yyyy-MM-dd` |
+
 #### Response Example
+
+```http
+201 Created
+```
 
 ```json
 {
@@ -238,6 +249,14 @@ Authorization: Bearer {accessToken}
   "createdAt": "2026-09-14T18:00:00"
 }
 ```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `400 Bad Request` | 제목 누락, 제목/여행지 길이 초과, 종료일이 시작일보다 빠름 |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
+| `404 Not Found` | 토큰의 사용자 ID에 해당하는 사용자가 없음 |
 
 ### 여행 목록 조회
 
