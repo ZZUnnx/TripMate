@@ -41,6 +41,7 @@ Authorization: Bearer {accessToken}
 | Trip | `GET` | `/api/trips` | 예정 |
 | Trip | `GET` | `/api/trips/{tripId}` | 예정 |
 | Trip Member | `POST` | `/api/trips/{tripId}/members` | 예정 |
+| Chat | `GET` | `/api/chat/rooms` | 구현됨 |
 | Chat | WebSocket | `/ws/chat` | 예정 |
 | Schedule Candidate | `GET` | `/api/trips/{tripId}/schedule-candidates` | 예정 |
 | Schedule Candidate | `PATCH` | `/api/schedule-candidates/{candidateId}/approve` | 예정 |
@@ -285,6 +286,39 @@ Authorization: Bearer {accessToken}
 ```
 
 ## Chat
+
+### 채팅방 목록 조회
+
+```http
+GET /api/chat/rooms
+Authorization: Bearer {accessToken}
+```
+
+현재 사용자가 생성했거나 참여 중인 여행방을 채팅방 목록으로 조회한다.
+
+#### Response Example
+
+```json
+[
+  {
+    "tripId": 1,
+    "title": "부산 여행",
+    "destination": "부산",
+    "lastMessage": "내일 오전에 해운대 갈까?",
+    "lastSenderNickname": "여행자",
+    "lastMessageAt": "2026-09-14T18:30:00",
+    "unreadCount": 0,
+    "pinned": false,
+    "aiSummaryAvailable": true
+  }
+]
+```
+
+#### Error
+
+| Status | 상황 |
+| --- | --- |
+| `401 Unauthorized` | 토큰 누락 또는 유효하지 않은 토큰 |
 
 ### 채팅 연결
 
