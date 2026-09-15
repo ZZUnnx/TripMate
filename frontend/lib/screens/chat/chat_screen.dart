@@ -13,7 +13,7 @@ import '../../widgets/common/card_decoration.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/home/bottom_navigation.dart';
 
-class ChatScreen extends StatelessWidget {
+class ChatScreen extends StatefulWidget {
   const ChatScreen({
     this.currentIndex = 1,
     this.onNavigationSelected,
@@ -22,6 +22,47 @@ class ChatScreen extends StatelessWidget {
 
   final int currentIndex;
   final ValueChanged<int>? onNavigationSelected;
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  int _refreshVersion = 0;
+
+  Future<void> _openCreateRoomSheet() async {
+    final auth = context.read<AuthProvider>();
+
+    if (!auth.isLoggedIn || auth.accessToken == null) {
+      Navigator.pushNamed(context, '/login');
+      return;
+    }
+
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(context.rs(24)),
+        ),
+      ),
+      builder: (context) {
+        return _CreateChatRoomSheet(accessToken: auth.accessToken!);
+      },
+    );
+
+    if (!mounted || created != true) {
+      return;
+    }
+
+    setState(() {
+      _refreshVersion++;
+    });
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('채팅방이 생성되었습니다.')));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +89,9 @@ class ChatScreen extends StatelessWidget {
                             ListView(
                               padding: context.insetsFromLTRB(22, 24, 22, 118),
                               children: [
-                                const ChatHeader(),
+                                ChatHeader(onCreateTap: _openCreateRoomSheet),
                                 const ResponsiveGap(height: 30),
-                                const _ChatBody(),
+                                _ChatBody(refreshVersion: _refreshVersion),
                               ],
                             ),
                             Positioned(
@@ -58,8 +99,8 @@ class ChatScreen extends StatelessWidget {
                               right: context.rs(18),
                               bottom: context.rs(12),
                               child: BottomNavigation(
-                                currentIndex: currentIndex,
-                                onItemSelected: onNavigationSelected,
+                                currentIndex: widget.currentIndex,
+                                onItemSelected: widget.onNavigationSelected,
                               ),
                             ),
                           ],
@@ -78,7 +119,9 @@ class ChatScreen extends StatelessWidget {
 }
 
 class _ChatBody extends StatelessWidget {
-  const _ChatBody();
+  const _ChatBody({required this.refreshVersion});
+
+  final int refreshVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -100,14 +143,21 @@ class _ChatBody extends StatelessWidget {
       );
     }
 
-    return _ChatRoomList(accessToken: auth.accessToken!);
+    return _ChatRoomList(
+      accessToken: auth.accessToken!,
+      refreshVersion: refreshVersion,
+    );
   }
 }
 
 class _ChatRoomList extends StatefulWidget {
-  const _ChatRoomList({required this.accessToken});
+  const _ChatRoomList({
+    required this.accessToken,
+    required this.refreshVersion,
+  });
 
   final String accessToken;
+  final int refreshVersion;
 
   @override
   State<_ChatRoomList> createState() => _ChatRoomListState();
@@ -126,7 +176,8 @@ class _ChatRoomListState extends State<_ChatRoomList> {
   void didUpdateWidget(covariant _ChatRoomList oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.accessToken != widget.accessToken) {
+    if (oldWidget.accessToken != widget.accessToken ||
+        oldWidget.refreshVersion != widget.refreshVersion) {
       _chatRoomsFuture = _fetchChatRooms();
     }
   }
@@ -307,6 +358,305 @@ class _ChatRoomListState extends State<_ChatRoomList> {
     }
 
     return const PersonAvatar();
+  }
+}
+
+class _CreateChatRoomSheet extends StatefulWidget {
+  const _CreateChatRoomSheet({required this.accessToken});
+
+  final String accessToken;
+
+  @override
+  State<_CreateChatRoomSheet> createState() => _CreateChatRoomSheetState();
+}
+
+class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
+  final _titleController = TextEditingController();
+  final _destinationController = TextEditingController();
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _destinationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _createRoom() async {
+    final title = _titleController.text.trim();
+    final destination = _destinationController.text.trim();
+
+    if (title.isEmpty) {
+      _showMessage('채팅방 이름을 입력해주세요.');
+      return;
+    }
+
+    if (_startDate != null &&
+        _endDate != null &&
+        _endDate!.isBefore(_startDate!)) {
+      _showMessage('종료일은 시작일보다 빠를 수 없습니다.');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ChatService.createChatRoom(
+        accessToken: widget.accessToken,
+        title: title,
+        destination: destination,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSaving = false;
+      });
+
+      _showMessage(e.toString());
+    }
+  }
+
+  Future<void> _pickDate({required bool isStartDate}) async {
+    final now = DateTime.now();
+    final initialDate = isStartDate
+        ? _startDate ?? now
+        : _endDate ?? _startDate ?? now;
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+    );
+
+    if (!mounted || pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      if (isStartDate) {
+        _startDate = pickedDate;
+
+        if (_endDate != null && _endDate!.isBefore(pickedDate)) {
+          _endDate = pickedDate;
+        }
+      } else {
+        _endDate = pickedDate;
+      }
+    });
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: context.insetsFromLTRB(24, 18, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '채팅방 만들기',
+                      style: TextStyle(
+                        color: const Color(0xFF121827),
+                        fontSize: context.rs(22),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const ResponsiveGap(height: 18),
+              _SheetTextField(
+                controller: _titleController,
+                label: '채팅방 이름',
+                hint: '예: 제주도 여행',
+                textInputAction: TextInputAction.next,
+              ),
+              const ResponsiveGap(height: 14),
+              _SheetTextField(
+                controller: _destinationController,
+                label: '여행지',
+                hint: '예: 제주',
+                textInputAction: TextInputAction.done,
+              ),
+              const ResponsiveGap(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DateSelectButton(
+                      label: '시작일',
+                      value: _formatDateLabel(_startDate),
+                      onTap: _isSaving
+                          ? null
+                          : () => _pickDate(isStartDate: true),
+                    ),
+                  ),
+                  const ResponsiveGap(width: 10),
+                  Expanded(
+                    child: _DateSelectButton(
+                      label: '종료일',
+                      value: _formatDateLabel(_endDate),
+                      onTap: _isSaving
+                          ? null
+                          : () => _pickDate(isStartDate: false),
+                    ),
+                  ),
+                ],
+              ),
+              const ResponsiveGap(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: context.rs(54),
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _createRoom,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF635BFF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          '만들기',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDateLabel(DateTime? date) {
+    if (date == null) {
+      return '선택';
+    }
+
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '${date.year}.$month.$day';
+  }
+}
+
+class _SheetTextField extends StatelessWidget {
+  const _SheetTextField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.textInputAction,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final TextInputAction textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textInputAction: textInputAction,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: const Color(0xFFF6F7FB),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(context.rs(14)),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _DateSelectButton extends StatelessWidget {
+  const _DateSelectButton({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.calendar_month_rounded),
+      label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: context.rs(12),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: context.rs(14),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        foregroundColor: const Color(0xFF121827),
+        padding: context.symmetricInsets(horizontal: 12, vertical: 12),
+        side: const BorderSide(color: Color(0xFFE0E3EE)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(context.rs(14)),
+        ),
+      ),
+    );
   }
 }
 

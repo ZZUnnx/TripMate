@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../common/responsive.dart';
 
 class ChatHeader extends StatelessWidget {
-  const ChatHeader({super.key});
+  const ChatHeader({this.onSearchTap, this.onCreateTap, super.key});
+
+  final VoidCallback? onSearchTap;
+  final VoidCallback? onCreateTap;
 
   @override
   Widget build(BuildContext context) {
@@ -35,12 +38,15 @@ class ChatHeader extends StatelessWidget {
             ],
           ),
         ),
-        _HeaderIconButton(icon: Icons.search_rounded, onTap: () {}),
+        _HeaderIconButton(
+          icon: Icons.search_rounded,
+          onTap: onSearchTap ?? () {},
+        ),
         const ResponsiveGap(width: 14),
         _HeaderIconButton(
           icon: Icons.add_rounded,
           isPrimary: true,
-          onTap: () {},
+          onTap: onCreateTap ?? () {},
         ),
       ],
     );

@@ -32,4 +32,52 @@ class ChatService {
 
     throw Exception('채팅 목록을 불러오지 못했습니다. (${response.statusCode})');
   }
+
+  static Future<void> createChatRoom({
+    required String accessToken,
+    required String title,
+    String? destination,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final body = <String, dynamic>{'title': title};
+
+    if (destination != null && destination.trim().isNotEmpty) {
+      body['destination'] = destination.trim();
+    }
+
+    if (startDate != null) {
+      body['startDate'] = _formatDate(startDate);
+    }
+
+    if (endDate != null) {
+      body['endDate'] = _formatDate(endDate);
+    }
+
+    final response = await http.post(
+      Uri.parse('${AuthService.baseUrl}/api/trips'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return;
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    throw Exception('채팅방을 만들지 못했습니다. (${response.statusCode})');
+  }
+
+  static String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '${date.year}-$month-$day';
+  }
 }

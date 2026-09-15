@@ -38,6 +38,20 @@ public class Trip {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public Trip(
+            String title,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            User owner
+    ) {
+        this.title = title;
+        this.destination = destination;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.owner = owner;
+    }
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
