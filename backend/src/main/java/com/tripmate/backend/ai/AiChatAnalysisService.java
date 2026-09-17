@@ -13,16 +13,14 @@ public class AiChatAnalysisService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final GeminiService geminiService;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AiChatAnalysisService(
             ChatMessageRepository chatMessageRepository,
-            GeminiService geminiService,
-            ObjectMapper objectMapper
+            GeminiService geminiService
     ) {
         this.chatMessageRepository = chatMessageRepository;
         this.geminiService = geminiService;
-        this.objectMapper = objectMapper;
     }
 
     public AiAnalyzeResponse analyze(Long tripId) {
