@@ -34,7 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _openCreateRoomSheet() async {
     final auth = context.read<AuthProvider>();
 
-    if (!auth.isLoggedIn || auth.accessToken == null) {
+    if (!auth.isLoggedIn || auth.accessToken == null || auth.userId == null) {
       Navigator.pushNamed(context, '/login');
       return;
     }
@@ -146,6 +146,7 @@ class _ChatBody extends StatelessWidget {
 
     return _ChatRoomList(
       accessToken: auth.accessToken!,
+      currentUserId: auth.userId!,
       refreshVersion: refreshVersion,
     );
   }
@@ -154,10 +155,12 @@ class _ChatBody extends StatelessWidget {
 class _ChatRoomList extends StatefulWidget {
   const _ChatRoomList({
     required this.accessToken,
+    required this.currentUserId,
     required this.refreshVersion,
   });
 
   final String accessToken;
+  final int currentUserId;
   final int refreshVersion;
 
   @override
@@ -283,7 +286,11 @@ class _ChatRoomListState extends State<_ChatRoomList> {
       context,
       MaterialPageRoute<void>(
         builder: (context) {
-          return ChatDetailScreen(room: room, accessToken: widget.accessToken);
+          return ChatDetailScreen(
+            room: room,
+            accessToken: widget.accessToken,
+            currentUserId: widget.currentUserId,
+          );
         },
       ),
     );

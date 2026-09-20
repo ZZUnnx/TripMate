@@ -45,7 +45,7 @@ Authorization: Bearer {accessToken}
 | Chat | `GET` | `/api/chat/rooms` | 구현됨 |
 | Chat | `GET` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
 | Chat | `POST` | `/api/chat/rooms/{tripId}/messages` | 구현됨 |
-| Chat | WebSocket | `/ws/chat` | 예정 |
+| Chat | WebSocket/STOMP | `/ws/chat` | 구현됨 |
 | Schedule Candidate | `GET` | `/api/trips/{tripId}/schedule-candidates` | 예정 |
 | Schedule Candidate | `PATCH` | `/api/schedule-candidates/{candidateId}/approve` | 예정 |
 | Schedule | `POST` | `/api/trips/{tripId}/schedules` | 예정 |
@@ -485,18 +485,38 @@ Authorization: Bearer {accessToken}
 ### 채팅 연결
 
 ```text
-WebSocket /ws/chat
+WebSocket/STOMP /ws/chat
 ```
 
-여행방별 실시간 채팅을 위한 WebSocket 엔드포인트이다.
+여행방별 실시간 채팅을 위한 STOMP over WebSocket 엔드포인트이다.
+JWT는 STOMP `CONNECT` 헤더의 `Authorization: Bearer {accessToken}`로 전달한다.
 
-#### Message Example
+#### STOMP Destination
+
+| 구분 | Destination | 설명 |
+| --- | --- | --- |
+| Subscribe | `/topic/trips/{tripId}/messages` | 해당 여행방의 새 채팅 메시지 수신 |
+| Send | `/app/trips/{tripId}/messages` | 해당 여행방에 새 채팅 메시지 전송 |
+
+#### Send Body Example
 
 ```json
 {
+  "content": "내일 오전에 해운대 갈까?"
+}
+```
+
+#### Broadcast Body Example
+
+```json
+{
+  "id": 2,
   "tripId": 1,
   "senderId": 1,
-  "content": "내일 오전에 해운대 갈까?"
+  "senderNickname": "여행자",
+  "content": "내일 오전에 해운대 갈까?",
+  "sentAt": "2026-09-20T20:50:00",
+  "mine": true
 }
 ```
 
