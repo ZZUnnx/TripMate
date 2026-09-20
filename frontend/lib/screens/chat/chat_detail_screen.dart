@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../../models/chat_message.dart';
 import '../../models/chat_room.dart';
 import '../../models/trip_member.dart';
 import '../../services/chat_service.dart';
+import '../../services/chat_socket_service.dart';
 import '../../widgets/chat/chat_avatars.dart';
 import '../../widgets/common/responsive.dart';
 
@@ -14,11 +16,13 @@ class ChatDetailScreen extends StatefulWidget {
   const ChatDetailScreen({
     required this.room,
     required this.accessToken,
+    required this.currentUserId,
     super.key,
   });
 
   final ChatRoom room;
   final String accessToken;
+  final int currentUserId;
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -30,21 +34,35 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   late Future<List<ChatMessage>> _messagesFuture;
   late Future<List<TripMember>> _membersFuture;
+  late ChatSocketService _chatSocketService;
   List<ChatMessage> _messages = const [];
   bool _isSending = false;
   bool _isRoomMenuOpen = false;
+  StreamSubscription<ChatMessage>? _messageSubscription;
 
   @override
   void initState() {
     super.initState();
     _messagesFuture = _loadMessages();
     _membersFuture = _loadMembers();
+    _chatSocketService = ChatSocketService(
+      accessToken: widget.accessToken,
+      tripId: widget.room.tripId,
+      currentUserId: widget.currentUserId,
+    );
+    _messageSubscription = _chatSocketService.messages.listen(
+      _appendMessage,
+      onError: _showSocketError,
+    );
+    _chatSocketService.connect();
   }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _messageSubscription?.cancel();
+    _chatSocketService.dispose();
     super.dispose();
   }
 
@@ -79,23 +97,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
 
     try {
-      final message = await ChatService.sendMessage(
-        accessToken: widget.accessToken,
-        tripId: widget.room.tripId,
-        content: content,
-      );
+      _chatSocketService.sendMessage(content);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _messages = [..._messages, message];
         _messageController.clear();
         _isSending = false;
       });
-
-      _scrollToBottomSoon();
     } catch (e) {
       if (!mounted) {
         return;
@@ -108,6 +119,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+
+  void _appendMessage(ChatMessage message) {
+    if (!mounted || _messages.any((item) => item.id == message.id)) {
+      return;
+    }
+
+    setState(() {
+      _messages = [..._messages, message];
+    });
+
+    _scrollToBottomSoon();
+  }
+
+  void _showSocketError(Object error) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(error.toString())));
   }
 
   void _retry() {

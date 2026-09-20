@@ -55,6 +55,11 @@ public class ChatRoomService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public void verifyChatRoomAccess(Long tripId, Long userId) {
+        findAccessibleTrip(tripId, userId);
+    }
+
     @Transactional
     public ChatMessageResponse sendMessage(
             Long tripId,
@@ -62,6 +67,24 @@ public class ChatRoomService {
             SendChatMessageRequest request
     ) {
         Trip trip = findAccessibleTrip(tripId, userId);
+        String content = request.content() == null
+                ? ""
+                : request.content().trim();
+
+        if (content.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Message content is required."
+            );
+        }
+
+        if (content.length() > 2000) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Message content is too long."
+            );
+        }
+
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -70,7 +93,7 @@ public class ChatRoomService {
         ChatMessage message = new ChatMessage(
                 trip,
                 sender,
-                request.content().trim()
+                content
         );
 
         return ChatMessageResponse.from(chatMessageRepository.save(message), userId);
