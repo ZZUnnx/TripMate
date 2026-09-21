@@ -9,6 +9,7 @@ import '../../models/trip_member.dart';
 import '../../services/chat_service.dart';
 import '../../widgets/chat/chat_avatars.dart';
 import '../../widgets/common/responsive.dart';
+import '../../services/ai_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   const ChatDetailScreen({
@@ -130,7 +131,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
   }
 
-  void _openAiSummarySheet() {
+  Future<void> _openAiSummarySheet() async {
+  try {
+    final items = await AiService.analyzeChat(
+      widget.room.tripId,
+    );
+
+    if (!mounted) return;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -140,9 +148,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           top: Radius.circular(context.rs(28)),
         ),
       ),
-      builder: (context) => const _AiSummarySheet(),
+      builder: (context) => _AiSummarySheet(
+        items: items,
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('AI 요약에 실패했습니다: $e'),
+      ),
     );
   }
+}
 
   void _openRoomMenu() {
     setState(() {
@@ -966,7 +985,11 @@ class _SendButton extends StatelessWidget {
 }
 
 class _AiSummarySheet extends StatelessWidget {
-  const _AiSummarySheet();
+  final List<dynamic> items;
+
+  const _AiSummarySheet({
+    required this.items,
+  });
 
   @override
   Widget build(BuildContext context) {
