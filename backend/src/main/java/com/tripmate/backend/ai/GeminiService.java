@@ -22,7 +22,7 @@ public class GeminiService {
 
         String url =
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                + "gemini-3.6-flash:generateContent";
+                + "gemini-3.7-flash:generateContent";
 
         GeminiRequest requestBody = new GeminiRequest(
                 List.of(
