@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../common/responsive.dart';
 
-// 하단 네비게이션 바
 class BottomNavigation extends StatelessWidget {
   const BottomNavigation({
     this.currentIndex = 0,
@@ -24,9 +23,9 @@ class BottomNavigation extends StatelessWidget {
       child: Material(
         color: Colors.white,
         child: Padding(
-          padding: context.insetsFromLTRB(14, 9, 14, 10),
+          padding: context.insetsFromLTRB(24, 9, 24, 10),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _NavItem(
                 icon: Icons.home_outlined,
@@ -39,12 +38,6 @@ class BottomNavigation extends StatelessWidget {
                 label: '채팅',
                 isActive: currentIndex == 1,
                 onTap: () => onItemSelected?.call(1),
-              ),
-              _NavItem(
-                icon: Icons.alt_route_rounded,
-                label: '일정',
-                isActive: false,
-                onTap: () => onItemSelected?.call(2),
               ),
               _NavItem(
                 icon: Icons.calendar_month_outlined,
