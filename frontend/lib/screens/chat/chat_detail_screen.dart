@@ -165,32 +165,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _openAiSummarySheet() async {
-  try {
-    final items = await AiService.analyzeChat(
-      widget.room.tripId,
-    );
+    try {
+      final items = await AiService.analyzeChat(widget.room.tripId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
-      backgroundColor: Colors.transparent,
-      builder: (context) => _AiSummarySheet(
-        items: items,
-      ),
-    );
-  } catch (e) {
-    if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AiSummarySheet(items: items),
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('AI 요약에 실패했습니다: $e'),
-      ),
-    );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('AI 요약에 실패했습니다: $e')));
+    }
   }
-}
 
   void _openRoomMenu() {
     setState(() {
@@ -1565,7 +1558,9 @@ class _AttachmentAction extends StatelessWidget {
 }
 
 class _AiSummarySheet extends StatelessWidget {
-  const _AiSummarySheet();
+  const _AiSummarySheet({required this.items});
+
+  final List<dynamic> items;
 
   @override
   Widget build(BuildContext context) {
