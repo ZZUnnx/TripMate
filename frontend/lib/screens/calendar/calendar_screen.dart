@@ -95,9 +95,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ],
                             ),
                             Positioned(
-                              left: context.rs(18),
-                              right: context.rs(18),
-                              bottom: context.rs(12),
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
                               child: BottomNavigation(
                                 currentIndex: widget.currentIndex,
                                 onItemSelected: widget.onNavigationSelected,

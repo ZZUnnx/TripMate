@@ -15,54 +15,50 @@ class BottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(context.rs(38));
-
     return Container(
-      height: context.rs(76),
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0x22000000),
-            blurRadius: context.rs(26),
-            offset: Offset(0, context.rs(10)),
-          ),
-        ],
+      height: context.rs(70),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFDCE6E3))),
       ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: Material(
-          color: Colors.white,
-          child: Padding(
-            padding: context.symmetricInsets(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                _NavItem(
-                  icon: Icons.home_rounded,
-                  label: '홈',
-                  isActive: currentIndex == 0,
-                  onTap: () => onItemSelected?.call(0),
-                ),
-                _NavItem(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: '채팅',
-                  isActive: currentIndex == 1,
-                  onTap: () => onItemSelected?.call(1),
-                ),
-                _NavItem(
-                  icon: Icons.calendar_today_outlined,
-                  label: '캘린더',
-                  isActive: currentIndex == 2,
-                  onTap: () => onItemSelected?.call(2),
-                ),
-                _NavItem(
-                  icon: Icons.payments_outlined,
-                  label: '정산',
-                  isActive: currentIndex == 3,
-                  onTap: () => onItemSelected?.call(3),
-                ),
-              ],
-            ),
+      child: Material(
+        color: Colors.white,
+        child: Padding(
+          padding: context.insetsFromLTRB(14, 9, 14, 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.home_outlined,
+                label: '홈',
+                isActive: currentIndex == 0,
+                onTap: () => onItemSelected?.call(0),
+              ),
+              _NavItem(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: '채팅',
+                isActive: currentIndex == 1,
+                onTap: () => onItemSelected?.call(1),
+              ),
+              _NavItem(
+                icon: Icons.alt_route_rounded,
+                label: '일정',
+                isActive: false,
+                onTap: () => onItemSelected?.call(2),
+              ),
+              _NavItem(
+                icon: Icons.calendar_month_outlined,
+                label: '캘린더',
+                isActive: currentIndex == 2,
+                onTap: () => onItemSelected?.call(2),
+              ),
+              _NavItem(
+                icon: Icons.account_balance_wallet_outlined,
+                label: '정산',
+                isActive: currentIndex == 3,
+                onTap: () => onItemSelected?.call(3),
+              ),
+            ],
           ),
         ),
       ),
@@ -85,22 +81,34 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? const Color(0xFF635BFF) : const Color(0xFF9AA1B3);
+    final color = isActive ? const Color(0xFF0B5F55) : const Color(0xFF8A9895);
 
-    return Expanded(
+    return SizedBox(
+      width: context.rs(54),
       child: Semantics(
         button: true,
         selected: isActive,
         label: label,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(context.rs(28)),
+          borderRadius: BorderRadius.circular(context.rs(12)),
           child: SizedBox(
-            height: double.infinity,
+            height: context.rs(51),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Icon(icon, color: color, size: context.rs(28)),
+                Container(
+                  width: context.rs(32),
+                  height: context.rs(25),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? const Color(0xFFDDF3EE)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(context.rs(999)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: color, size: context.rs(17)),
+                ),
                 const ResponsiveGap(height: 4),
                 Text(
                   label,
@@ -108,9 +116,9 @@ class _NavItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: color,
-                    fontSize: context.rs(12),
-                    fontWeight: isActive ? FontWeight.w900 : FontWeight.w700,
-                    height: 1,
+                    fontSize: context.rs(10),
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    height: 1.2,
                   ),
                 ),
               ],
