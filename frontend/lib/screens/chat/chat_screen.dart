@@ -6,11 +6,6 @@ import '../../models/chat_room.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/chat_service.dart';
 import 'chat_detail_screen.dart';
-import '../../widgets/chat/chat_avatars.dart';
-import '../../widgets/chat/chat_header.dart';
-import '../../widgets/chat/chat_room_card.dart';
-import '../../widgets/chat/chat_section_header.dart';
-import '../../widgets/common/card_decoration.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/home/bottom_navigation.dart';
 
@@ -70,6 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
+        backgroundColor: const Color(0xFFF7FAF9),
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -88,17 +84,26 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Stack(
                           children: [
                             ListView(
-                              padding: context.insetsFromLTRB(22, 24, 22, 118),
+                              padding: context.insetsFromLTRB(16, 10, 16, 92),
                               children: [
-                                ChatHeader(onCreateTap: _openCreateRoomSheet),
-                                const ResponsiveGap(height: 30),
+                                _ChatListHeader(
+                                  onBackTap: () {
+                                    if (Navigator.canPop(context)) {
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  onMoreTap: _openCreateRoomSheet,
+                                ),
+                                const ResponsiveGap(height: 10),
+                                const _ChatSearchBar(),
+                                const ResponsiveGap(height: 12),
                                 _ChatBody(refreshVersion: _refreshVersion),
                               ],
                             ),
                             Positioned(
-                              left: context.rs(18),
-                              right: context.rs(18),
-                              bottom: context.rs(12),
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
                               child: BottomNavigation(
                                 currentIndex: widget.currentIndex,
                                 onItemSelected: widget.onNavigationSelected,
@@ -114,6 +119,129 @@ class _ChatScreenState extends State<ChatScreen> {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatListHeader extends StatelessWidget {
+  const _ChatListHeader({required this.onBackTap, required this.onMoreTap});
+
+  final VoidCallback onBackTap;
+  final VoidCallback onMoreTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: context.rs(58),
+      child: Row(
+        children: [
+          _HeaderCircleButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: onBackTap,
+          ),
+          const ResponsiveGap(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '여행 채팅',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF152523),
+                    fontSize: context.rs(18),
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
+                  ),
+                ),
+                const ResponsiveGap(height: 2),
+                Text(
+                  '진행 중인 여행과 지난 여행을 한눈에 확인해요',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF60706D),
+                    fontSize: context.rs(11),
+                    fontWeight: FontWeight.w400,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const ResponsiveGap(width: 12),
+          _HeaderCircleButton(icon: Icons.more_horiz_rounded, onTap: onMoreTap),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderCircleButton extends StatelessWidget {
+  const _HeaderCircleButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: context.rs(34),
+          height: context.rs(34),
+          child: Icon(
+            icon,
+            color: const Color(0xFF152523),
+            size: context.rs(18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatSearchBar extends StatelessWidget {
+  const _ChatSearchBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: context.rs(42),
+      padding: context.symmetricInsets(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFDCE6E3)),
+        borderRadius: BorderRadius.circular(context.rs(12)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.search_rounded,
+            color: const Color(0xFF8A9895),
+            size: context.rs(16),
+          ),
+          const ResponsiveGap(width: 8),
+          Expanded(
+            child: Text(
+              '여행명, 장소, 메시지 검색',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF8A9895),
+                fontSize: context.rs(13),
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -234,45 +362,53 @@ class _ChatRoomListState extends State<_ChatRoomList> {
   }
 
   List<Widget> _buildRoomSections(List<ChatRoom> rooms) {
-    final pinnedRooms = rooms.where((room) => room.pinned).toList();
-    final recentRooms = rooms.where((room) => !room.pinned).toList();
+    final ongoingRooms = rooms.where((room) => room.pinned).toList();
+    final pastRooms = rooms.where((room) => !room.pinned).toList();
     final children = <Widget>[];
 
-    if (pinnedRooms.isNotEmpty) {
+    if (ongoingRooms.isNotEmpty) {
       children.add(
-        const ChatSectionHeader(title: '고정된 채팅', showCollapseButton: true),
+        _ChatSectionHeader(title: '진행 중인 여행', count: ongoingRooms.length),
       );
+      children.add(const ResponsiveGap(height: 8));
+      children.addAll(_buildRoomCards(ongoingRooms, isOngoing: true));
       children.add(const ResponsiveGap(height: 12));
-      children.addAll(_buildRoomCards(pinnedRooms));
-      children.add(const ResponsiveGap(height: 28));
     }
 
-    if (recentRooms.isNotEmpty) {
-      children.add(const ChatSectionHeader(title: '최근 채팅'));
-      children.add(const ResponsiveGap(height: 12));
-      children.addAll(_buildRoomCards(recentRooms));
+    if (pastRooms.isNotEmpty) {
+      children.add(_ChatSectionHeader(title: '지난 여행', count: pastRooms.length));
+      children.add(const ResponsiveGap(height: 8));
+      children.addAll(_buildRoomCards(pastRooms, isOngoing: false));
     }
 
     return children;
   }
 
-  List<Widget> _buildRoomCards(List<ChatRoom> rooms) {
+  List<Widget> _buildRoomCards(
+    List<ChatRoom> rooms, {
+    required bool isOngoing,
+  }) {
     final children = <Widget>[];
 
     for (final room in rooms) {
       if (children.isNotEmpty) {
-        children.add(ResponsiveGap(height: room.pinned ? 10 : 1));
+        children.add(const ResponsiveGap(height: 8));
       }
 
       children.add(
-        ChatRoomCard(
+        _ChatRoomRow(
           title: room.title,
           message: _previewMessage(room),
-          time: _formatRoomTime(room.lastMessageAt),
-          badgeText: room.aiSummaryAvailable ? 'AI 요약 가능' : null,
-          unreadCount: room.unreadCount > 0 ? room.unreadCount : null,
-          isPinned: room.pinned,
-          avatar: _avatarFor(room),
+          date: _formatRoomDate(room.lastMessageAt),
+          time: _formatRoomClock(room.lastMessageAt),
+          badgeText: room.aiSummaryAvailable ? 'AI 요약' : '${room.memberCount}명',
+          avatarLabel: _avatarLabelFor(room),
+          avatarColor: _avatarColorFor(room),
+          badgeStyle: room.aiSummaryAvailable
+              ? _ChatBadgeStyle.coral
+              : isOngoing
+              ? _ChatBadgeStyle.mint
+              : _ChatBadgeStyle.neutral,
           onTap: () => _openChatRoom(room),
         ),
       );
@@ -315,29 +451,15 @@ class _ChatRoomListState extends State<_ChatRoomList> {
       return message;
     }
 
-    return '$sender : $message';
+    return '$sender · $message';
   }
 
-  String _formatRoomTime(DateTime? dateTime) {
+  String _formatRoomDate(DateTime? dateTime) {
     if (dateTime == null) {
       return '';
     }
 
     final now = DateTime.now();
-    final yesterday = now.subtract(const Duration(days: 1));
-
-    if (_isSameDate(dateTime, now)) {
-      final hour = dateTime.hour;
-      final displayHour = hour % 12 == 0 ? 12 : hour % 12;
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = hour < 12 ? '오전' : '오후';
-
-      return '$period $displayHour:$minute';
-    }
-
-    if (_isSameDate(dateTime, yesterday)) {
-      return '어제';
-    }
 
     if (dateTime.year == now.year) {
       return '${dateTime.month}/${dateTime.day}';
@@ -346,44 +468,262 @@ class _ChatRoomListState extends State<_ChatRoomList> {
     return '${dateTime.year}.${dateTime.month}.${dateTime.day}';
   }
 
-  bool _isSameDate(DateTime left, DateTime right) {
-    return left.year == right.year &&
-        left.month == right.month &&
-        left.day == right.day;
+  String _formatRoomClock(DateTime? dateTime) {
+    if (dateTime == null) {
+      return '';
+    }
+
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+
+    return '$hour:$minute';
   }
 
-  Widget _avatarFor(ChatRoom room) {
-    final keyword = '${room.title} ${room.destination ?? ''}'.toLowerCase();
+  String _avatarLabelFor(ChatRoom room) {
+    final source = room.destination?.trim().isNotEmpty == true
+        ? room.destination!.trim()
+        : room.title.trim();
 
-    if (keyword.contains('제주')) {
-      return const TravelAvatar(style: TravelAvatarStyle.jeju);
+    if (source.isEmpty) {
+      return '여';
     }
 
-    if (keyword.contains('홋카이도') || keyword.contains('hokkaido')) {
-      return const TravelAvatar(style: TravelAvatarStyle.hokkaido);
+    final compact = source.replaceAll(' ', '');
+
+    if (compact.length <= 2) {
+      return compact;
     }
 
-    if (keyword.contains('부산')) {
-      return const TravelAvatar(style: TravelAvatarStyle.busan);
-    }
+    return compact.characters.take(2).toString();
+  }
 
-    if (keyword.contains('다낭') || keyword.contains('danang')) {
-      return const TravelAvatar(style: TravelAvatarStyle.danang);
-    }
+  Color _avatarColorFor(ChatRoom room) {
+    final colors = [
+      const Color(0xFFDDEEF9),
+      const Color(0xFFFFE8D9),
+      const Color(0xFFEAF0FB),
+      const Color(0xFFFFF6DF),
+      const Color(0xFFDDF3EE),
+    ];
+    return colors[room.tripId.abs() % colors.length];
+  }
+}
 
-    if (keyword.contains('가족')) {
-      return const FamilyAvatar();
-    }
+class _ChatSectionHeader extends StatelessWidget {
+  const _ChatSectionHeader({required this.title, required this.count});
 
-    if (keyword.contains('팀') || keyword.contains('프로젝트')) {
-      return const GroupAvatar();
-    }
+  final String title;
+  final int count;
 
-    if (keyword.contains('동남아') || keyword.contains('커플')) {
-      return const CoupleAvatar();
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: const Color(0xFF152523),
+            fontSize: context.rs(14),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          '$count개',
+          style: TextStyle(
+            color: const Color(0xFF0B5F55),
+            fontSize: context.rs(11),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-    return const PersonAvatar();
+enum _ChatBadgeStyle { mint, neutral, coral }
+
+class _ChatRoomRow extends StatelessWidget {
+  const _ChatRoomRow({
+    required this.title,
+    required this.message,
+    required this.date,
+    required this.time,
+    required this.badgeText,
+    required this.avatarLabel,
+    required this.avatarColor,
+    required this.badgeStyle,
+    required this.onTap,
+  });
+
+  final String title;
+  final String message;
+  final String date;
+  final String time;
+  final String badgeText;
+  final String avatarLabel;
+  final Color avatarColor;
+  final _ChatBadgeStyle badgeStyle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(context.rs(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(context.rs(12)),
+        child: Ink(
+          padding: context.symmetricInsets(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFDCE6E3)),
+            borderRadius: BorderRadius.circular(context.rs(12)),
+          ),
+          child: Row(
+            children: [
+              _ChatAvatar(label: avatarLabel, color: avatarColor),
+              const ResponsiveGap(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: const Color(0xFF152523),
+                              fontSize: context.rs(15),
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        const ResponsiveGap(width: 8),
+                        Text(
+                          date,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: const Color(0xFF8A9895),
+                            fontSize: context.rs(10),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const ResponsiveGap(height: 6),
+                    Text(
+                      message,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFF60706D),
+                        fontSize: context.rs(13),
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
+                      ),
+                    ),
+                    const ResponsiveGap(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _ChatBadge(text: badgeText, style: badgeStyle),
+                        Text(
+                          time,
+                          style: TextStyle(
+                            color: const Color(0xFF8A9895),
+                            fontSize: context.rs(10),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatAvatar extends StatelessWidget {
+  const _ChatAvatar({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: context.rs(40),
+      height: context.rs(40),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: context.rs(2)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: const Color(0xFF152523),
+          fontSize: context.rs(label.length > 1 ? 11 : 12),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBadge extends StatelessWidget {
+  const _ChatBadge({required this.text, required this.style});
+
+  final String text;
+  final _ChatBadgeStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = switch (style) {
+      _ChatBadgeStyle.mint => (
+        background: const Color(0xFFDDF3EE),
+        foreground: const Color(0xFF0B5F55),
+      ),
+      _ChatBadgeStyle.neutral => (
+        background: const Color(0xFFEEF3F2),
+        foreground: const Color(0xFF60706D),
+      ),
+      _ChatBadgeStyle.coral => (
+        background: const Color(0xFFFFF0EC),
+        foreground: const Color(0xFFF27864),
+      ),
+    };
+
+    return Container(
+      padding: context.symmetricInsets(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(context.rs(999)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: colors.foreground,
+          fontSize: context.rs(10),
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
+      ),
+    );
   }
 }
 
@@ -694,7 +1034,7 @@ class _LoadingState extends StatelessWidget {
     return Padding(
       padding: context.symmetricInsets(vertical: 52),
       child: const Center(
-        child: CircularProgressIndicator(color: Color(0xFF635BFF)),
+        child: CircularProgressIndicator(color: Color(0xFF0B5F55)),
       ),
     );
   }
@@ -719,18 +1059,22 @@ class _StateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: context.symmetricInsets(horizontal: 20, vertical: 24),
-      decoration: cardDecoration(context),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFDCE6E3)),
+        borderRadius: BorderRadius.circular(context.rs(12)),
+      ),
       child: Column(
         children: [
-          Icon(icon, color: const Color(0xFF635BFF), size: context.rs(36)),
+          Icon(icon, color: const Color(0xFF0B5F55), size: context.rs(36)),
           const ResponsiveGap(height: 14),
           Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: const Color(0xFF121827),
+              color: const Color(0xFF152523),
               fontSize: context.rs(18),
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const ResponsiveGap(height: 8),
@@ -738,9 +1082,9 @@ class _StateCard extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: const Color(0xFF76809A),
+              color: const Color(0xFF60706D),
               fontSize: context.rs(14),
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1.35,
             ),
           ),
@@ -749,7 +1093,7 @@ class _StateCard extends StatelessWidget {
             FilledButton(
               onPressed: onAction,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF635BFF),
+                backgroundColor: const Color(0xFF0B5F55),
                 foregroundColor: Colors.white,
               ),
               child: Text(actionLabel!),
