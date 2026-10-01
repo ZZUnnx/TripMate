@@ -12,6 +12,7 @@ class ChatRoom {
     this.lastMessage,
     this.lastSenderNickname,
     this.lastMessageAt,
+    this.createdAt,
   });
 
   final int tripId;
@@ -23,9 +24,12 @@ class ChatRoom {
   final String? lastMessage;
   final String? lastSenderNickname;
   final DateTime? lastMessageAt;
+  final DateTime? createdAt;
   final int unreadCount;
   final bool pinned;
   final bool aiSummaryAvailable;
+
+  DateTime? get activityAt => lastMessageAt ?? createdAt;
 
   factory ChatRoom.fromJson(Map<String, dynamic> json) {
     return ChatRoom(
@@ -38,6 +42,7 @@ class ChatRoom {
       lastMessage: _readNullableString(json['lastMessage']),
       lastSenderNickname: _readNullableString(json['lastSenderNickname']),
       lastMessageAt: _readDateTime(json['lastMessageAt']),
+      createdAt: _readDateTime(json['createdAt']),
       unreadCount: _readInt(json['unreadCount'] ?? 0, 'unreadCount'),
       pinned: json['pinned'] == true,
       aiSummaryAvailable: json['aiSummaryAvailable'] == true,
