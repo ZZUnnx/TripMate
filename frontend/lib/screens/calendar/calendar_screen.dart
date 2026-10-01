@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/trip_schedule.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/schedule_service.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/home/bottom_navigation.dart';
 
@@ -19,8 +23,31 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  DateTime _focusedMonth = DateTime(2026, 4);
-  DateTime _selectedDay = DateTime(2026, 4, 19);
+  Future<_CalendarData>? _calendarFuture;
+  String? _loadedAccessToken;
+  DateTime _focusedMonth = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+
+  Future<_CalendarData> _loadCalendar(String accessToken) async {
+    final schedules = await ScheduleService.fetchAllSchedules(
+      accessToken: accessToken,
+    );
+
+    return _CalendarData(schedules: schedules);
+  }
+
+  void _refreshCalendar() {
+    final accessToken = context.read<AuthProvider>().accessToken;
+
+    if (accessToken == null) {
+      return;
+    }
+
+    setState(() {
+      _calendarFuture = _loadCalendar(accessToken);
+      _loadedAccessToken = accessToken;
+    });
+  }
 
   void _changeMonth(int offset) {
     setState(() {
@@ -32,12 +59,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  void _openTripDetail() {
+  void _openTripDetail(_AgendaItem agenda, List<TripSchedule> schedules) {
+    final tripSchedules = schedules
+        .where((schedule) => schedule.tripId == agenda.schedule.tripId)
+        .toList(growable: false);
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _TripCalendarDetailScreen(
           currentIndex: widget.currentIndex,
           onNavigationSelected: widget.onNavigationSelected,
+          schedules: tripSchedules,
+          selectedSchedule: agenda.schedule,
         ),
       ),
     );
@@ -45,6 +78,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
+    if (auth.isInitialized &&
+        auth.accessToken != null &&
+        (_calendarFuture == null || _loadedAccessToken != auth.accessToken)) {
+      _loadedAccessToken = auth.accessToken;
+      _calendarFuture = _loadCalendar(auth.accessToken!);
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -64,32 +106,60 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     width: contentWidth,
                     child: Stack(
                       children: [
-                        ListView(
-                          padding: context.insetsFromLTRB(18, 8, 18, 88),
-                          children: [
-                            const _CalendarHeader(),
-                            const ResponsiveGap(height: 14),
-                            _MonthControl(
-                              focusedMonth: _focusedMonth,
-                              onPrevious: () => _changeMonth(-1),
-                              onNext: () => _changeMonth(1),
-                            ),
-                            const ResponsiveGap(height: 10),
-                            const _CalendarLegend(),
-                            const ResponsiveGap(height: 10),
-                            _MonthGrid(
-                              focusedMonth: _focusedMonth,
-                              selectedDay: _selectedDay,
-                              onDaySelected: (day) {
-                                setState(() => _selectedDay = day);
-                              },
-                            ),
-                            const ResponsiveGap(height: 10),
-                            _SelectedDayAgenda(
-                              selectedDay: _selectedDay,
-                              onAgendaTap: _openTripDetail,
-                            ),
-                          ],
+                        FutureBuilder<_CalendarData>(
+                          future: _calendarFuture,
+                          builder: (context, snapshot) {
+                            final data = snapshot.data ?? _CalendarData.empty();
+
+                            return ListView(
+                              padding: context.insetsFromLTRB(18, 8, 18, 88),
+                              children: [
+                                const _CalendarHeader(),
+                                const ResponsiveGap(height: 14),
+                                _MonthControl(
+                                  focusedMonth: _focusedMonth,
+                                  onPrevious: () => _changeMonth(-1),
+                                  onNext: () => _changeMonth(1),
+                                ),
+                                const ResponsiveGap(height: 10),
+                                const _CalendarLegend(),
+                                const ResponsiveGap(height: 10),
+                                if (!auth.isInitialized ||
+                                    snapshot.connectionState ==
+                                        ConnectionState.waiting)
+                                  const _CalendarStateCard(
+                                    message: '일정을 불러오는 중이에요.',
+                                  )
+                                else if (auth.accessToken == null)
+                                  const _CalendarStateCard(
+                                    message: '로그인 후 캘린더를 확인할 수 있어요.',
+                                  )
+                                else if (snapshot.hasError)
+                                  _CalendarStateCard(
+                                    message: '${snapshot.error}',
+                                    actionLabel: '다시 시도',
+                                    onAction: _refreshCalendar,
+                                  )
+                                else ...[
+                                  _MonthGrid(
+                                    focusedMonth: _focusedMonth,
+                                    selectedDay: _selectedDay,
+                                    agendaItems: data.agendaItems,
+                                    onDaySelected: (day) {
+                                      setState(() => _selectedDay = day);
+                                    },
+                                  ),
+                                  const ResponsiveGap(height: 10),
+                                  _SelectedDayAgenda(
+                                    selectedDay: _selectedDay,
+                                    agendaItems: data.agendaItems,
+                                    onAgendaTap: (agenda) =>
+                                        _openTripDetail(agenda, data.schedules),
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
                         ),
                         Positioned(
                           left: 0,
@@ -291,11 +361,13 @@ class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
     required this.focusedMonth,
     required this.selectedDay,
+    required this.agendaItems,
     required this.onDaySelected,
   });
 
   final DateTime focusedMonth;
   final DateTime selectedDay;
+  final List<_AgendaItem> agendaItems;
   final ValueChanged<DateTime> onDaySelected;
 
   @override
@@ -333,7 +405,7 @@ class _MonthGrid extends StatelessWidget {
                   day: day,
                   isInMonth: day.month == focusedMonth.month,
                   isSelected: _isSameDate(day, selectedDay),
-                  markerColors: _markerColorsFor(day),
+                  markerColors: _markerColorsFor(day, agendaItems),
                   onTap: () => onDaySelected(day),
                 );
               }),
@@ -453,15 +525,17 @@ class _CalendarDayCell extends StatelessWidget {
 class _SelectedDayAgenda extends StatelessWidget {
   const _SelectedDayAgenda({
     required this.selectedDay,
+    required this.agendaItems,
     required this.onAgendaTap,
   });
 
   final DateTime selectedDay;
-  final VoidCallback onAgendaTap;
+  final List<_AgendaItem> agendaItems;
+  final ValueChanged<_AgendaItem> onAgendaTap;
 
   @override
   Widget build(BuildContext context) {
-    final agendas = _agendaFor(selectedDay);
+    final agendas = _agendaFor(selectedDay, agendaItems);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,7 +585,10 @@ class _SelectedDayAgenda extends StatelessWidget {
           ...agendas.map(
             (agenda) => Padding(
               padding: EdgeInsets.only(bottom: context.rs(7)),
-              child: _AgendaRow(agenda: agenda, onTap: onAgendaTap),
+              child: _AgendaRow(
+                agenda: agenda,
+                onTap: () => onAgendaTap(agenda),
+              ),
             ),
           ),
       ],
@@ -711,6 +788,49 @@ class _EmptyAgendaCard extends StatelessWidget {
   }
 }
 
+class _CalendarStateCard extends StatelessWidget {
+  const _CalendarStateCard({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: context.symmetricInsets(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFDCE6E3)),
+        borderRadius: BorderRadius.circular(context.rs(16)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: const Color(0xFF60706D),
+              fontSize: context.rs(12),
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const ResponsiveGap(height: 10),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CircleIconButton extends StatelessWidget {
   const _CircleIconButton({
     required this.icon,
@@ -750,10 +870,14 @@ class _TripCalendarDetailScreen extends StatelessWidget {
   const _TripCalendarDetailScreen({
     required this.currentIndex,
     required this.onNavigationSelected,
+    required this.schedules,
+    required this.selectedSchedule,
   });
 
   final int currentIndex;
   final ValueChanged<int>? onNavigationSelected;
+  final List<TripSchedule> schedules;
+  final TripSchedule selectedSchedule;
 
   void _handleNavigation(BuildContext context, int index) {
     if (index == currentIndex) {
@@ -772,6 +896,10 @@ class _TripCalendarDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final timelineSections = _timelineSectionsFromSchedules(schedules);
+    final timeRange = _timeRangeFor(schedules);
+    final dateRange = _tripDateRange(selectedSchedule);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -795,12 +923,19 @@ class _TripCalendarDetailScreen extends StatelessWidget {
                           padding: context.insetsFromLTRB(18, 5, 18, 88),
                           children: [
                             _TripDetailHeader(
+                              title: selectedSchedule.tripTitle,
+                              subtitle: '$dateRange · 여행 전체 타임라인',
                               onBack: () => Navigator.of(context).pop(),
                               onAdd: () =>
                                   _showPreparingMessage(context, '일정 추가'),
                             ),
                             const ResponsiveGap(height: 8),
-                            const _DayOverviewCard(),
+                            _DayOverviewCard(
+                              dateRange: dateRange,
+                              scheduleCount: schedules.length,
+                              destination:
+                                  selectedSchedule.tripDestination ?? '여행 일정',
+                            ),
                             const ResponsiveGap(height: 8),
                             _CalendarViewAction(
                               onTap: () => Navigator.of(context).pop(),
@@ -808,9 +943,9 @@ class _TripCalendarDetailScreen extends StatelessWidget {
                             const ResponsiveGap(height: 8),
                             const _CostSummaryCard(),
                             const ResponsiveGap(height: 8),
-                            const _TimelineHeading(),
+                            _TimelineHeading(timeRange: timeRange),
                             const ResponsiveGap(height: 8),
-                            const _TripTimeline(),
+                            _TripTimeline(sections: timelineSections),
                             const ResponsiveGap(height: 8),
                             _MapNotice(
                               onTap: () => _showPreparingMessage(context, '지도'),
@@ -841,8 +976,15 @@ class _TripCalendarDetailScreen extends StatelessWidget {
 }
 
 class _TripDetailHeader extends StatelessWidget {
-  const _TripDetailHeader({required this.onBack, required this.onAdd});
+  const _TripDetailHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onBack,
+    required this.onAdd,
+  });
 
+  final String title;
+  final String subtitle;
   final VoidCallback onBack;
   final VoidCallback onAdd;
 
@@ -864,7 +1006,7 @@ class _TripDetailHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '제주 봄 여행',
+                  title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -876,7 +1018,7 @@ class _TripDetailHeader extends StatelessWidget {
                 ),
                 const ResponsiveGap(height: 2),
                 Text(
-                  '4월 18일 - 21일 · 여행 전체 타임라인',
+                  subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -927,7 +1069,15 @@ class _TripDetailHeader extends StatelessWidget {
 }
 
 class _DayOverviewCard extends StatelessWidget {
-  const _DayOverviewCard();
+  const _DayOverviewCard({
+    required this.dateRange,
+    required this.scheduleCount,
+    required this.destination,
+  });
+
+  final String dateRange;
+  final int scheduleCount;
+  final String destination;
 
   @override
   Widget build(BuildContext context) {
@@ -946,7 +1096,7 @@ class _DayOverviewCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '4월 18일 - 21일',
+                  dateRange,
                   style: TextStyle(
                     color: const Color(0xFF152523),
                     fontSize: context.rs(15),
@@ -958,14 +1108,14 @@ class _DayOverviewCard extends StatelessWidget {
                 Row(
                   children: [
                     _StatusPill(
-                      label: 'DAY 2',
+                      label: '확정',
                       foreground: const Color(0xFF0B5F55),
                       background: const Color(0xFFDDF3EE),
                     ),
                     const ResponsiveGap(width: 5),
                     Flexible(
                       child: Text(
-                        '여행 전체 일정 · 4일 12개',
+                        '$destination · 일정 $scheduleCount개',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1138,7 +1288,7 @@ class _CostSummaryCard extends StatelessWidget {
               ),
               const ResponsiveGap(width: 6),
               Text(
-                '확정 비용 합계',
+                '일정 정산',
                 style: TextStyle(
                   color: const Color(0xFF0B5F55),
                   fontSize: context.rs(11),
@@ -1153,7 +1303,7 @@ class _CostSummaryCard extends StatelessWidget {
             children: [
               const _TinyMutedText('총액'),
               Text(
-                '₩142,500',
+                '준비 중',
                 style: TextStyle(
                   color: const Color(0xFF0B5F55),
                   fontSize: context.rs(15),
@@ -1166,12 +1316,12 @@ class _CostSummaryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              _TinyMutedText('1인 기준'),
-              _TinyMutedText('₩35,625'),
+              _TinyMutedText('연결 상태'),
+              _TinyMutedText('정산 화면에서 관리'),
             ],
           ),
           const ResponsiveGap(height: 8),
-          const _TinyMutedText('금액이 확정된 일정만 합계에 포함됩니다. 비용 미정 7건 제외.'),
+          const _TinyMutedText('확정 일정의 비용 연결은 정산 기능에서 이어집니다.'),
         ],
       ),
     );
@@ -1179,7 +1329,9 @@ class _CostSummaryCard extends StatelessWidget {
 }
 
 class _TimelineHeading extends StatelessWidget {
-  const _TimelineHeading();
+  const _TimelineHeading({required this.timeRange});
+
+  final String timeRange;
 
   @override
   Widget build(BuildContext context) {
@@ -1195,7 +1347,7 @@ class _TimelineHeading extends StatelessWidget {
           ),
         ),
         Text(
-          '08:30 - 20:00',
+          timeRange,
           style: TextStyle(
             color: const Color(0xFF8A9895),
             fontSize: context.rs(10),
@@ -1208,12 +1360,18 @@ class _TimelineHeading extends StatelessWidget {
 }
 
 class _TripTimeline extends StatelessWidget {
-  const _TripTimeline();
+  const _TripTimeline({required this.sections});
+
+  final List<_TimelineDateSection> sections;
 
   @override
   Widget build(BuildContext context) {
+    if (sections.isEmpty) {
+      return const _EmptyAgendaCard();
+    }
+
     return Column(
-      children: _timelineSections
+      children: sections
           .map(
             (section) => Padding(
               padding: EdgeInsets.only(bottom: context.rs(12)),
@@ -1452,8 +1610,8 @@ class _MapNotice extends StatelessWidget {
 }
 
 class _AgendaItem {
-  const _AgendaItem({
-    required this.date,
+  _AgendaItem({
+    required this.schedule,
     required this.category,
     required this.time,
     required this.title,
@@ -1466,7 +1624,8 @@ class _AgendaItem {
     this.participants,
   });
 
-  final DateTime date;
+  final TripSchedule schedule;
+  DateTime get date => schedule.scheduledDate;
   final String category;
   final String time;
   final String title;
@@ -1519,25 +1678,11 @@ class _TimelineStatus {
 const _travelColor = Color(0xFF148776);
 const _personalColor = Color(0xFF8067B8);
 const _freeColor = Color(0xFF4E79C7);
-const _bookingColor = Color(0xFFE8A33D);
-const _payColor = Color(0xFF4E79C7);
 
 const _placeConfirmed = _TimelineStatus(
   label: '장소 확정',
   foreground: Color(0xFF2F9D69),
   background: Color(0xFFE5F6EE),
-);
-
-const _bookingDone = _TimelineStatus(
-  label: '예약 완료',
-  foreground: _bookingColor,
-  background: Color(0xFFFFF6DF),
-);
-
-const _bookingNeeded = _TimelineStatus(
-  label: '예약 필요',
-  foreground: _bookingColor,
-  background: Color(0xFFFFF6DF),
 );
 
 const _freeSchedule = _TimelineStatus(
@@ -1546,259 +1691,15 @@ const _freeSchedule = _TimelineStatus(
   background: Color(0xFFEAF0FB),
 );
 
-const _onSitePay = _TimelineStatus(
-  label: '현장 결제',
-  foreground: _payColor,
-  background: Color(0xFFEAF0FB),
-);
+class _CalendarData {
+  _CalendarData({required this.schedules})
+    : agendaItems = schedules.map(_agendaItemFromSchedule).toList();
 
-final List<_TimelineDateSection> _timelineSections = [
-  const _TimelineDateSection(
-    title: '4월 18일 금요일',
-    items: [
-      _TripTimelineEntry(
-        time: '09:00',
-        title: '제주도 도착 · 숙소 체크인',
-        place: '제주시 연동',
-        status: _placeConfirmed,
-        cost: '비용 미정',
-        dotColor: _travelColor,
-      ),
-      _TripTimelineEntry(
-        time: '11:30',
-        title: '렌터카 픽업',
-        place: '제주국제공항 카운터',
-        status: _bookingDone,
-        cost: '₩65,000',
-        dotColor: _bookingColor,
-      ),
-      _TripTimelineEntry(
-        time: '14:00',
-        title: '도보 관광 · 저녁 식사',
-        place: '제주 시내 · 자유 일정',
-        status: _freeSchedule,
-        cost: '비용 미정',
-        dotColor: _freeColor,
-      ),
-    ],
-  ),
-  const _TimelineDateSection(
-    title: '4월 19일 토요일',
-    items: [
-      _TripTimelineEntry(
-        time: '08:30',
-        title: '성산항 집결',
-        place: '성산포항 종합여객터미널',
-        status: _placeConfirmed,
-        cost: '비용 미정',
-        dotColor: _travelColor,
-      ),
-      _TripTimelineEntry(
-        time: '09:00',
-        title: '우도행 배 탑승',
-        place: '성산 ↔ 우도 왕복',
-        status: _bookingNeeded,
-        cost: '₩10,500',
-        dotColor: _bookingColor,
-      ),
-      _TripTimelineEntry(
-        time: '10:00',
-        title: '우도 전기자전거',
-        place: '하우목동항 1번 대여소',
-        status: _onSitePay,
-        cost: '₩20,000',
-        dotColor: _freeColor,
-      ),
-      _TripTimelineEntry(
-        time: '12:00',
-        title: '온오프 점심',
-        place: '우도면 우도해안길 876',
-        status: _bookingDone,
-        cost: '₩18,000',
-        dotColor: Color(0xFFF27864),
-      ),
-    ],
-  ),
-  const _TimelineDateSection(
-    title: '4월 20일 일요일',
-    items: [
-      _TripTimelineEntry(
-        time: '09:30',
-        title: '검멀레 해변 산책',
-        place: '우도면 조일리 해안 산책로',
-        status: _freeSchedule,
-        cost: '비용 미정',
-        dotColor: _freeColor,
-      ),
-      _TripTimelineEntry(
-        time: '13:00',
-        title: '흑돼지 저녁',
-        place: '제주시 조천읍 함덕로',
-        status: _bookingNeeded,
-        cost: '₩39,500',
-        dotColor: _bookingColor,
-      ),
-      _TripTimelineEntry(
-        time: '20:00',
-        title: '해변 야경 산책',
-        place: '함덕해수욕장',
-        status: _freeSchedule,
-        cost: '비용 미정',
-        dotColor: _travelColor,
-      ),
-    ],
-  ),
-  const _TimelineDateSection(
-    title: '4월 21일 월요일',
-    items: [
-      _TripTimelineEntry(
-        time: '10:00',
-        title: '렌터카 반납',
-        place: '제주국제공항 카운터',
-        status: _placeConfirmed,
-        cost: '비용 미정',
-        dotColor: _travelColor,
-      ),
-      _TripTimelineEntry(
-        time: '12:30',
-        title: '공항 출국',
-        place: '제주국제공항',
-        status: _freeSchedule,
-        cost: '비용 미정',
-        dotColor: _freeColor,
-      ),
-    ],
-  ),
-];
+  _CalendarData.empty() : schedules = const [], agendaItems = const [];
 
-final List<_AgendaItem> _agendaItems = [
-  _AgendaItem(
-    date: DateTime(2026, 4, 2),
-    category: '개인',
-    time: '18:00',
-    title: '여행 준비물 점검',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 6),
-    category: '개인',
-    time: '09:00',
-    title: '항공권 확인',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 9),
-    category: '개인',
-    time: '21:00',
-    title: '짐 챙기기',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 14),
-    category: '개인',
-    time: '15:00',
-    title: '체크인 알림',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 17),
-    category: '공유 여행',
-    time: '16:00',
-    title: '렌터카 픽업',
-    subtitle: '제주 봄 여행 · 제주공항',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    reservationLabel: '예약 완료',
-    reservationColor: Color(0xFF2F9D69),
-    reservationBackground: Color(0xFFE5F6EE),
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 18),
-    category: '공유 여행',
-    time: '11:00',
-    title: '숙소 체크인',
-    subtitle: '제주 봄 여행 · 애월',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    reservationLabel: '예약 완료',
-    reservationColor: Color(0xFF2F9D69),
-    reservationBackground: Color(0xFFE5F6EE),
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 19),
-    category: '공유 여행',
-    time: '09:00-10:00',
-    title: '우도행 배 탑승',
-    subtitle: '제주 봄 여행 · 성산항',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    reservationLabel: '예약 필요',
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 19),
-    category: '공유 여행',
-    time: '12:00-13:00',
-    title: '온오프 점심',
-    subtitle: '제주 봄 여행 · 우도해안길 876',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    reservationLabel: '예약 완료',
-    reservationColor: Color(0xFF2F9D69),
-    reservationBackground: Color(0xFFE5F6EE),
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 19),
-    category: '개인',
-    time: '20:30',
-    title: '엄마 생일 전화하기',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 20),
-    category: '공유 여행',
-    time: '10:00',
-    title: '오름 산책',
-    subtitle: '제주 봄 여행 · 새별오름',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 21),
-    category: '공유 여행',
-    time: '14:00',
-    title: '카페 투어',
-    subtitle: '제주 봄 여행 · 구좌',
-    color: _travelColor,
-    categoryBackground: Color(0xFFDDF3EE),
-    participants: '4명',
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 23),
-    category: '개인',
-    time: '20:00',
-    title: '정산 확인',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-  _AgendaItem(
-    date: DateTime(2026, 4, 29),
-    category: '개인',
-    time: '19:00',
-    title: '사진 정리',
-    color: _personalColor,
-    categoryBackground: Color(0xFFF0ECF8),
-  ),
-];
+  final List<TripSchedule> schedules;
+  final List<_AgendaItem> agendaItems;
+}
 
 List<DateTime> _calendarDaysFor(DateTime month) {
   final firstDay = DateTime(month.year, month.month);
@@ -1808,8 +1709,8 @@ List<DateTime> _calendarDaysFor(DateTime month) {
   return List.generate(35, (index) => gridStart.add(Duration(days: index)));
 }
 
-List<Color> _markerColorsFor(DateTime day) {
-  final items = _agendaFor(day);
+List<Color> _markerColorsFor(DateTime day, List<_AgendaItem> agendaItems) {
+  final items = _agendaFor(day, agendaItems);
   final colors = <Color>[];
 
   if (items.any((item) => item.category == '개인')) {
@@ -1822,8 +1723,8 @@ List<Color> _markerColorsFor(DateTime day) {
   return colors;
 }
 
-List<_AgendaItem> _agendaFor(DateTime day) {
-  return _agendaItems
+List<_AgendaItem> _agendaFor(DateTime day, List<_AgendaItem> agendaItems) {
+  return agendaItems
       .where((item) => _isSameDate(item.date, day))
       .toList(growable: false);
 }
@@ -1833,6 +1734,152 @@ String _agendaSummary(List<_AgendaItem> agendas) {
   final personalCount = agendas.where((item) => item.category == '개인').length;
 
   return '공유 여행 $travelCount개 · 개인 $personalCount개';
+}
+
+_AgendaItem _agendaItemFromSchedule(TripSchedule schedule) {
+  final category = schedule.category == '개인' ? '개인' : '공유 여행';
+  final color = category == '개인' ? _personalColor : _travelColor;
+  final place = schedule.placeName ?? schedule.tripDestination;
+
+  return _AgendaItem(
+    schedule: schedule,
+    category: category,
+    time: _formatScheduleTime(schedule.scheduledTime),
+    title: schedule.title,
+    subtitle: [schedule.tripTitle, ?place].join(' · '),
+    color: color,
+    categoryBackground: category == '개인'
+        ? const Color(0xFFF0ECF8)
+        : const Color(0xFFDDF3EE),
+    reservationLabel: '확정',
+    reservationColor: const Color(0xFF2F9D69),
+    reservationBackground: const Color(0xFFE5F6EE),
+    participants: category == '공유 여행' ? '공유' : null,
+  );
+}
+
+List<_TimelineDateSection> _timelineSectionsFromSchedules(
+  List<TripSchedule> schedules,
+) {
+  final grouped = <String, List<TripSchedule>>{};
+
+  for (final schedule in schedules) {
+    final key = _dateKey(schedule.scheduledDate);
+    grouped.putIfAbsent(key, () => []).add(schedule);
+  }
+
+  final dates = grouped.keys.toList()..sort();
+
+  return dates.map((key) {
+    final items = grouped[key]!..sort(_compareTripSchedules);
+    final date = items.first.scheduledDate;
+
+    return _TimelineDateSection(
+      title: _formatFullDate(date),
+      items: items.map(_timelineEntryFromSchedule).toList(),
+    );
+  }).toList();
+}
+
+_TripTimelineEntry _timelineEntryFromSchedule(TripSchedule schedule) {
+  final category = schedule.category == '개인' ? '개인' : '공유 여행';
+  final dotColor = category == '개인' ? _personalColor : _travelColor;
+
+  return _TripTimelineEntry(
+    time: _formatScheduleTime(schedule.scheduledTime),
+    title: schedule.title,
+    place: schedule.placeName ?? schedule.description ?? '장소 미정',
+    status: category == '개인' ? _freeSchedule : _placeConfirmed,
+    cost: '비용 미정',
+    dotColor: dotColor,
+  );
+}
+
+int _compareTripSchedules(TripSchedule left, TripSchedule right) {
+  final dateCompare = left.scheduledDate.compareTo(right.scheduledDate);
+
+  if (dateCompare != 0) {
+    return dateCompare;
+  }
+
+  final timeCompare = (left.scheduledTime ?? '').compareTo(
+    right.scheduledTime ?? '',
+  );
+
+  if (timeCompare != 0) {
+    return timeCompare;
+  }
+
+  final orderCompare = left.sortOrder.compareTo(right.sortOrder);
+
+  if (orderCompare != 0) {
+    return orderCompare;
+  }
+
+  return left.id.compareTo(right.id);
+}
+
+String _timeRangeFor(List<TripSchedule> schedules) {
+  final times =
+      schedules
+          .map((schedule) => schedule.scheduledTime)
+          .whereType<String>()
+          .toList()
+        ..sort();
+
+  if (times.isEmpty) {
+    return '시간 미정';
+  }
+
+  if (times.length == 1) {
+    return _formatScheduleTime(times.first);
+  }
+
+  return '${_formatScheduleTime(times.first)} - ${_formatScheduleTime(times.last)}';
+}
+
+String _tripDateRange(TripSchedule schedule) {
+  final startDate = schedule.tripStartDate;
+  final endDate = schedule.tripEndDate;
+
+  if (startDate != null && endDate != null) {
+    return '${_formatShortDate(startDate)} - ${_formatShortDate(endDate)}';
+  }
+
+  return _formatShortDate(schedule.scheduledDate);
+}
+
+String _formatScheduleTime(String? time) {
+  if (time == null || time.isEmpty) {
+    return '시간 미정';
+  }
+
+  final parts = time.split(':');
+
+  if (parts.length >= 2) {
+    return '${parts[0]}:${parts[1]}';
+  }
+
+  return time;
+}
+
+String _formatShortDate(DateTime date) {
+  return '${date.month}월 ${date.day}일';
+}
+
+String _formatFullDate(DateTime date) {
+  return '${date.month}월 ${date.day}일 ${_weekdayName(date)}요일';
+}
+
+String _weekdayName(DateTime date) {
+  return const ['월', '화', '수', '목', '금', '토', '일'][date.weekday - 1];
+}
+
+String _dateKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+
+  return '${date.year}-$month-$day';
 }
 
 bool _isSameDate(DateTime a, DateTime b) {

@@ -38,7 +38,7 @@ Authorization: Bearer {accessToken}
 | Auth | `POST` | `/api/auth/login` | 구현됨 |
 | AI | `GET` | `/api/ai/test` | 구현됨 |
 | Trip | `POST` | `/api/trips` | 구현됨 |
-| Trip | `GET` | `/api/trips` | 예정 |
+| Trip | `GET` | `/api/trips` | 구현됨 |
 | Trip | `GET` | `/api/trips/{tripId}` | 예정 |
 | Trip Member | `GET` | `/api/trips/{tripId}/members` | 구현됨 |
 | Trip Member | `POST` | `/api/trips/{tripId}/members` | 구현됨 |
@@ -48,10 +48,10 @@ Authorization: Bearer {accessToken}
 | Chat | WebSocket/STOMP | `/ws/chat` | 구현됨 |
 | Schedule Candidate | `GET` | `/api/trips/{tripId}/schedule-candidates` | 예정 |
 | Schedule Candidate | `PATCH` | `/api/schedule-candidates/{candidateId}/approve` | 예정 |
-| Schedule | `POST` | `/api/trips/{tripId}/schedules` | 예정 |
-| Schedule | `GET` | `/api/trips/{tripId}/schedules` | 예정 |
-| Schedule | `PATCH` | `/api/schedules/{scheduleId}` | 예정 |
-| Schedule | `DELETE` | `/api/schedules/{scheduleId}` | 예정 |
+| Schedule | `POST` | `/api/trips/{tripId}/schedules` | 구현됨 |
+| Schedule | `GET` | `/api/trips/{tripId}/schedules` | 구현됨 |
+| Schedule | `PATCH` | `/api/schedules/{scheduleId}` | 구현됨 |
+| Schedule | `DELETE` | `/api/schedules/{scheduleId}` | 구현됨 |
 
 ---
 
@@ -268,6 +268,8 @@ GET /api/trips
 Authorization: Bearer {accessToken}
 ```
 
+현재 사용자가 생성했거나 멤버로 참여 중인 여행방 목록을 조회한다. 통합 캘린더는 이 API로 여행 목록을 가져온 뒤 여행별 일정 API를 호출한다.
+
 #### Response Example
 
 ```json
@@ -277,7 +279,9 @@ Authorization: Bearer {accessToken}
     "title": "부산 여행",
     "destination": "부산",
     "startDate": "2026-10-01",
-    "endDate": "2026-10-03"
+    "endDate": "2026-10-03",
+    "ownerId": 1,
+    "createdAt": "2026-09-14T18:00:00"
   }
 ]
 ```
@@ -540,6 +544,8 @@ Authorization: Bearer {accessToken}
 
 ## Schedule
 
+확정된 여행 공유 일정을 등록하고 관리한다. 현재 구현 범위는 `trip_id`가 있는 여행 공유 일정이며, 개인 일정 전용 API와 테이블은 아직 없다.
+
 ### 일정 등록
 
 ```http
@@ -562,12 +568,41 @@ Authorization: Bearer {accessToken}
 }
 ```
 
+#### Response Example
+
+```http
+201 Created
+```
+
+```json
+{
+  "id": 1,
+  "tripId": 1,
+  "tripTitle": "부산 여행",
+  "tripDestination": "부산",
+  "tripStartDate": "2026-10-01",
+  "tripEndDate": "2026-10-03",
+  "title": "해운대 산책",
+  "category": "관광",
+  "scheduledDate": "2026-10-01",
+  "scheduledTime": "10:00:00",
+  "placeName": "해운대해수욕장",
+  "url": "https://example.com/place",
+  "description": "오전 산책 일정",
+  "sortOrder": 1,
+  "createdAt": "2026-10-01T10:00:00",
+  "updatedAt": "2026-10-01T10:00:00"
+}
+```
+
 ### 일정 목록 조회
 
 ```http
 GET /api/trips/{tripId}/schedules
 Authorization: Bearer {accessToken}
 ```
+
+접근 가능한 여행방의 확정 일정을 날짜, 시간, 정렬 순서, ID 순서로 조회한다.
 
 ### 일정 수정
 
@@ -576,9 +611,13 @@ PATCH /api/schedules/{scheduleId}
 Authorization: Bearer {accessToken}
 ```
 
+요청 본문은 일정 등록과 동일하다. 일정이 속한 여행방에 접근 가능한 사용자만 수정할 수 있다.
+
 ### 일정 삭제
 
 ```http
 DELETE /api/schedules/{scheduleId}
 Authorization: Bearer {accessToken}
 ```
+
+일정이 속한 여행방에 접근 가능한 사용자만 삭제할 수 있다.

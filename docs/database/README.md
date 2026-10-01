@@ -98,6 +98,8 @@
 
 ## 6. schedules (확정된 일정)
 
+> 2026-10-01 구현 기준: 현재 JPA 엔티티와 API는 `scheduled_date`, `scheduled_time`, `place_name`, `description`, `sort_order` 필드를 사용한다. 아래 표의 `schedule_date`, `start_time`, `end_time`, `address`, `memo`, `created_by`는 초기 설계안이며, 개인 일정/상세 장소 관리 확장 시 재정리한다.
+
 | 컬럼            | 타입           | 제약조건                    | 설명       |
 | ------------- | ------------ | ----------------------- | -------- |
 | id            | BIGINT       | PK, AUTO_INCREMENT      | 일정 ID    |

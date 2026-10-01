@@ -61,6 +61,48 @@ public class Schedule {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public Schedule(
+            Trip trip,
+            String title,
+            String category,
+            LocalDate scheduledDate,
+            LocalTime scheduledTime,
+            String placeName,
+            String url,
+            String description,
+            Integer sortOrder
+    ) {
+        this.trip = trip;
+        this.title = title;
+        this.category = category;
+        this.scheduledDate = scheduledDate;
+        this.scheduledTime = scheduledTime;
+        this.placeName = placeName;
+        this.url = url;
+        this.description = description;
+        this.sortOrder = sortOrder;
+    }
+
+    public void update(
+            String title,
+            String category,
+            LocalDate scheduledDate,
+            LocalTime scheduledTime,
+            String placeName,
+            String url,
+            String description,
+            Integer sortOrder
+    ) {
+        this.title = title;
+        this.category = category;
+        this.scheduledDate = scheduledDate;
+        this.scheduledTime = scheduledTime;
+        this.placeName = placeName;
+        this.url = url;
+        this.description = description;
+        this.sortOrder = sortOrder;
+    }
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
