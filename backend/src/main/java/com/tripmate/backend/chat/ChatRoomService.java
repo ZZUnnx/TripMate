@@ -115,6 +115,7 @@ public class ChatRoomService {
                 lastMessage == null ? null : lastMessage.getContent(),
                 lastMessage == null ? null : lastMessage.getSender().getNickname(),
                 lastMessage == null ? null : lastMessage.getSentAt(),
+                trip.getCreatedAt(),
                 0,
                 false,
                 lastMessage != null
@@ -135,19 +136,21 @@ public class ChatRoomService {
     ) {
         LocalDateTime leftAt = left.lastMessageAt();
         LocalDateTime rightAt = right.lastMessageAt();
+        LocalDateTime leftRecentAt = leftAt == null ? left.createdAt() : leftAt;
+        LocalDateTime rightRecentAt = rightAt == null ? right.createdAt() : rightAt;
 
-        if (leftAt == null && rightAt == null) {
+        if (leftRecentAt == null && rightRecentAt == null) {
             return 0;
         }
 
-        if (leftAt == null) {
+        if (leftRecentAt == null) {
             return 1;
         }
 
-        if (rightAt == null) {
+        if (rightRecentAt == null) {
             return -1;
         }
 
-        return rightAt.compareTo(leftAt);
+        return rightRecentAt.compareTo(leftRecentAt);
     }
 }

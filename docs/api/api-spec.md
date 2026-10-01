@@ -404,6 +404,7 @@ Authorization: Bearer {accessToken}
     "lastMessage": "내일 오전에 해운대 갈까?",
     "lastSenderNickname": "여행자",
     "lastMessageAt": "2026-09-14T18:30:00",
+    "createdAt": "2026-09-14T18:00:00",
     "unreadCount": 0,
     "pinned": false,
     "aiSummaryAvailable": true

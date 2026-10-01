@@ -87,11 +87,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               padding: context.insetsFromLTRB(16, 10, 16, 92),
                               children: [
                                 _ChatListHeader(
-                                  onBackTap: () {
-                                    if (Navigator.canPop(context)) {
-                                      Navigator.pop(context);
-                                    }
-                                  },
                                   onMoreTap: _openCreateRoomSheet,
                                 ),
                                 const ResponsiveGap(height: 10),
@@ -125,9 +120,8 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class _ChatListHeader extends StatelessWidget {
-  const _ChatListHeader({required this.onBackTap, required this.onMoreTap});
+  const _ChatListHeader({required this.onMoreTap});
 
-  final VoidCallback onBackTap;
   final VoidCallback onMoreTap;
 
   @override
@@ -136,11 +130,6 @@ class _ChatListHeader extends StatelessWidget {
       height: context.rs(58),
       child: Row(
         children: [
-          _HeaderCircleButton(
-            icon: Icons.chevron_left_rounded,
-            onTap: onBackTap,
-          ),
-          const ResponsiveGap(width: 12),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -159,7 +148,7 @@ class _ChatListHeader extends StatelessWidget {
                 ),
                 const ResponsiveGap(height: 2),
                 Text(
-                  '진행 중인 여행과 지난 여행을 한눈에 확인해요',
+                  '최근 대화순으로 모든 채팅방을 한눈에 확인해요',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -173,7 +162,7 @@ class _ChatListHeader extends StatelessWidget {
             ),
           ),
           const ResponsiveGap(width: 12),
-          _HeaderCircleButton(icon: Icons.more_horiz_rounded, onTap: onMoreTap),
+          _HeaderCircleButton(icon: Icons.add_rounded, onTap: onMoreTap),
         ],
       ),
     );
@@ -362,32 +351,14 @@ class _ChatRoomListState extends State<_ChatRoomList> {
   }
 
   List<Widget> _buildRoomSections(List<ChatRoom> rooms) {
-    final ongoingRooms = rooms.where((room) => room.pinned).toList();
-    final pastRooms = rooms.where((room) => !room.pinned).toList();
-    final children = <Widget>[];
-
-    if (ongoingRooms.isNotEmpty) {
-      children.add(
-        _ChatSectionHeader(title: '진행 중인 여행', count: ongoingRooms.length),
-      );
-      children.add(const ResponsiveGap(height: 8));
-      children.addAll(_buildRoomCards(ongoingRooms, isOngoing: true));
-      children.add(const ResponsiveGap(height: 12));
-    }
-
-    if (pastRooms.isNotEmpty) {
-      children.add(_ChatSectionHeader(title: '지난 여행', count: pastRooms.length));
-      children.add(const ResponsiveGap(height: 8));
-      children.addAll(_buildRoomCards(pastRooms, isOngoing: false));
-    }
-
-    return children;
+    return [
+      _ChatSectionHeader(title: '전체 채팅', count: rooms.length),
+      const ResponsiveGap(height: 8),
+      ..._buildRoomCards(rooms),
+    ];
   }
 
-  List<Widget> _buildRoomCards(
-    List<ChatRoom> rooms, {
-    required bool isOngoing,
-  }) {
+  List<Widget> _buildRoomCards(List<ChatRoom> rooms) {
     final children = <Widget>[];
 
     for (final room in rooms) {
@@ -399,16 +370,14 @@ class _ChatRoomListState extends State<_ChatRoomList> {
         _ChatRoomRow(
           title: room.title,
           message: _previewMessage(room),
-          date: _formatRoomDate(room.lastMessageAt),
-          time: _formatRoomClock(room.lastMessageAt),
+          date: _formatRoomDate(room.activityAt),
+          time: _formatRoomClock(room.activityAt),
           badgeText: room.aiSummaryAvailable ? 'AI 요약' : '${room.memberCount}명',
           avatarLabel: _avatarLabelFor(room),
           avatarColor: _avatarColorFor(room),
           badgeStyle: room.aiSummaryAvailable
               ? _ChatBadgeStyle.coral
-              : isOngoing
-              ? _ChatBadgeStyle.mint
-              : _ChatBadgeStyle.neutral,
+              : _ChatBadgeStyle.mint,
           onTap: () => _openChatRoom(room),
         ),
       );
