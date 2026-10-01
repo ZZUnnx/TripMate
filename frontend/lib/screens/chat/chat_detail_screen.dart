@@ -7,8 +7,10 @@ import 'package:flutter/services.dart';
 import '../../models/chat_message.dart';
 import '../../models/chat_room.dart';
 import '../../models/trip_member.dart';
+import '../../screens/calendar/calendar_screen.dart';
 import '../../services/chat_service.dart';
 import '../../services/chat_socket_service.dart';
+import '../../services/schedule_service.dart';
 import '../../widgets/common/responsive.dart';
 import '../../services/ai_service.dart';
 
@@ -84,6 +86,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       accessToken: widget.accessToken,
       tripId: widget.room.tripId,
     );
+  }
+
+  Future<void> _openSharedSchedule() async {
+    _closeRoomMenu();
+
+    try {
+      final schedules = await ScheduleService.fetchTripSchedules(
+        accessToken: widget.accessToken,
+        tripId: widget.room.tripId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (schedules.isEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('공유 일정이 아직 없어요.')));
+        return;
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TripCalendarDetailScreen(
+            currentIndex: 1,
+            onNavigationSelected: null,
+            schedules: schedules,
+            selectedSchedule: schedules.first,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('공유 일정을 불러오지 못했습니다. $error')));
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -198,6 +239,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
   }
 
+  Future<void> _openInviteMemberSheet() async {
+    final email = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _InviteMemberSheet(),
+    );
+
+    if (email == null || email.trim().isEmpty || !mounted) {
+      return;
+    }
+
+    try {
+      await ChatService.inviteMember(
+        accessToken: widget.accessToken,
+        tripId: widget.room.tripId,
+        email: email.trim(),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _membersFuture = _loadMembers();
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('친구를 초대했어요.')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   void _showPreparingMessage(String label) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text('$label 기능은 준비 중입니다.')));
@@ -258,10 +338,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             room: widget.room,
                             membersFuture: _membersFuture,
                             onClose: _closeRoomMenu,
+                            onInviteMember: _openInviteMemberSheet,
                             onScheduleSummary: () {
                               _closeRoomMenu();
                               _openAiSummarySheet();
                             },
+                            onSharedSchedule: _openSharedSchedule,
                             onSettlement: () {
                               _closeRoomMenu();
                               _showPreparingMessage('여행 정산');
@@ -405,7 +487,9 @@ class _RoomSideMenu extends StatelessWidget {
     required this.room,
     required this.membersFuture,
     required this.onClose,
+    required this.onInviteMember,
     required this.onScheduleSummary,
+    required this.onSharedSchedule,
     required this.onSettlement,
     required this.onFiles,
   });
@@ -413,7 +497,9 @@ class _RoomSideMenu extends StatelessWidget {
   final ChatRoom room;
   final Future<List<TripMember>> membersFuture;
   final VoidCallback onClose;
+  final VoidCallback onInviteMember;
   final VoidCallback onScheduleSummary;
+  final VoidCallback onSharedSchedule;
   final VoidCallback onSettlement;
   final VoidCallback onFiles;
 
@@ -485,7 +571,10 @@ class _RoomSideMenu extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DrawerParticipants(membersFuture: membersFuture),
+                        _DrawerParticipants(
+                          membersFuture: membersFuture,
+                          onInvite: onInviteMember,
+                        ),
                         const ResponsiveGap(height: 13),
                         const _DrawerDivider(),
                         const ResponsiveGap(height: 10),
@@ -499,7 +588,7 @@ class _RoomSideMenu extends StatelessWidget {
                           icon: Icons.calendar_month_outlined,
                           label: '공유 일정',
                           trailing: '5개',
-                          onTap: onScheduleSummary,
+                          onTap: onSharedSchedule,
                         ),
                         _DrawerMenuItem(
                           icon: Icons.photo_library_outlined,
@@ -658,9 +747,13 @@ class _DrawerTripFeature extends StatelessWidget {
 }
 
 class _DrawerParticipants extends StatelessWidget {
-  const _DrawerParticipants({required this.membersFuture});
+  const _DrawerParticipants({
+    required this.membersFuture,
+    required this.onInvite,
+  });
 
   final Future<List<TripMember>> membersFuture;
+  final VoidCallback onInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -689,7 +782,7 @@ class _DrawerParticipants extends StatelessWidget {
           );
         }
 
-        final visibleMembers = members.take(4).toList();
+        final visibleMembers = members.take(3).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,11 +800,64 @@ class _DrawerParticipants extends StatelessWidget {
               children: [
                 for (final member in visibleMembers)
                   Expanded(child: _DrawerParticipant(member: member)),
+                Expanded(child: _DrawerInviteButton(onTap: onInvite)),
               ],
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _DrawerInviteButton extends StatelessWidget {
+  const _DrawerInviteButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(context.rs(12)),
+        child: Padding(
+          padding: context.symmetricInsets(vertical: 2),
+          child: Column(
+            children: [
+              Container(
+                width: context.rs(40),
+                height: context.rs(40),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDF3EE),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFBFE5DD),
+                    width: context.rs(1),
+                  ),
+                ),
+                child: Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: const Color(0xFF0B5F55),
+                  size: context.rs(17),
+                ),
+              ),
+              const ResponsiveGap(height: 5),
+              Text(
+                '친구 초대',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: const Color(0xFF0B5F55),
+                  fontSize: context.rs(10),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -862,6 +1008,162 @@ class _DrawerMenuItem extends StatelessWidget {
   }
 }
 
+class _InviteMemberSheet extends StatefulWidget {
+  const _InviteMemberSheet();
+
+  @override
+  State<_InviteMemberSheet> createState() => _InviteMemberSheetState();
+}
+
+class _InviteMemberSheetState extends State<_InviteMemberSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).pop(_emailController.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        padding: context.insetsFromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7FAF9),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(context.rs(22)),
+          ),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '친구 초대',
+                      style: TextStyle(
+                        color: const Color(0xFF152523),
+                        fontSize: context.rs(18),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  _HeaderCircleButton(
+                    icon: Icons.close_rounded,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const ResponsiveGap(height: 6),
+              Text(
+                '초대할 친구의 이메일을 입력해 주세요.',
+                style: TextStyle(
+                  color: const Color(0xFF60706D),
+                  fontSize: context.rs(11),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const ResponsiveGap(height: 14),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'friend@example.com',
+                  prefixIcon: const Icon(
+                    Icons.mail_outline_rounded,
+                    color: Color(0xFF60706D),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: context.symmetricInsets(
+                    horizontal: 12,
+                    vertical: 13,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(context.rs(12)),
+                    borderSide: const BorderSide(color: Color(0xFFDCE6E3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(context.rs(12)),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF148776),
+                      width: 1.4,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(context.rs(12)),
+                    borderSide: const BorderSide(color: Color(0xFFF27864)),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(context.rs(12)),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFF27864),
+                      width: 1.4,
+                    ),
+                  ),
+                ),
+                validator: (value) {
+                  final email = value?.trim() ?? '';
+
+                  if (email.isEmpty) {
+                    return '이메일을 입력해주세요.';
+                  }
+
+                  if (!email.contains('@')) {
+                    return '이메일 형식을 확인해주세요.';
+                  }
+
+                  return null;
+                },
+                onFieldSubmitted: (_) => _submit(),
+              ),
+              const ResponsiveGap(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: context.rs(46),
+                child: FilledButton.icon(
+                  onPressed: _submit,
+                  icon: Icon(
+                    Icons.person_add_alt_1_rounded,
+                    size: context.rs(17),
+                  ),
+                  label: const Text('초대하기'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF148776),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(context.rs(12)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AiSummaryButton extends StatelessWidget {
   const _AiSummaryButton({required this.onTap});
 
@@ -912,84 +1214,22 @@ class _ConversationIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Center(
-          child: Container(
-            padding: context.symmetricInsets(horizontal: 9, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEF3F2),
-              borderRadius: BorderRadius.circular(context.rs(999)),
-            ),
-            child: Text(
-              _dateLabel(message.sentAt),
-              style: TextStyle(
-                color: const Color(0xFF60706D),
-                fontSize: context.rs(10),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+    return Center(
+      child: Container(
+        padding: context.symmetricInsets(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEF3F2),
+          borderRadius: BorderRadius.circular(context.rs(999)),
+        ),
+        child: Text(
+          _dateLabel(message.sentAt),
+          style: TextStyle(
+            color: const Color(0xFF60706D),
+            fontSize: context.rs(10),
+            fontWeight: FontWeight.w700,
           ),
         ),
-        const ResponsiveGap(height: 8),
-        Container(
-          padding: context.symmetricInsets(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: const Color(0xFFDCE6E3)),
-            borderRadius: BorderRadius.circular(context.rs(12)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: context.rs(32),
-                height: context.rs(32),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF6DF),
-                  borderRadius: BorderRadius.circular(context.rs(10)),
-                ),
-                child: Icon(
-                  Icons.push_pin_outlined,
-                  color: const Color(0xFFE8A33D),
-                  size: context.rs(15),
-                ),
-              ),
-              const ResponsiveGap(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '여행 정보',
-                      style: TextStyle(
-                        color: const Color(0xFFE8A33D),
-                        fontSize: context.rs(10),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const ResponsiveGap(height: 2),
-                    Text(
-                      '우도 배편 · 4/19 오전 후보',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF152523),
-                        fontSize: context.rs(12),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: const Color(0xFF8A9895),
-                size: context.rs(15),
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 

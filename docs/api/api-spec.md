@@ -228,6 +228,8 @@ Authorization: Bearer {accessToken}
 }
 ```
 
+현재 Flutter 채팅방 생성 화면에서는 `title`만 입력받는다. `destination`, `startDate`, `endDate`는 선택 필드이며 요청에서 생략될 수 있다.
+
 | 필드 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | `title` | `string` | O | 여행방 이름 |
@@ -340,6 +342,8 @@ Authorization: Bearer {accessToken}
 POST /api/trips/{tripId}/members
 Authorization: Bearer {accessToken}
 ```
+
+채팅방 서랍 메뉴의 친구 초대 버튼에서 이 API를 호출한다.
 
 #### Request Body
 
