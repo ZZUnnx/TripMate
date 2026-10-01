@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/trip.dart';
 import '../../models/trip_schedule.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/schedule_service.dart';
@@ -29,11 +30,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selectedDay = DateTime.now();
 
   Future<_CalendarData> _loadCalendar(String accessToken) async {
-    final schedules = await ScheduleService.fetchAllSchedules(
-      accessToken: accessToken,
+    final trips = await ScheduleService.fetchTrips(accessToken: accessToken);
+    final scheduleGroups = await Future.wait(
+      trips.map(
+        (trip) => ScheduleService.fetchTripSchedules(
+          accessToken: accessToken,
+          tripId: trip.id,
+        ),
+      ),
     );
+    final schedules = scheduleGroups.expand((items) => items).toList()
+      ..sort(_compareTripSchedules);
 
-    return _CalendarData(schedules: schedules);
+    return _CalendarData(trips: trips, schedules: schedules);
   }
 
   void _refreshCalendar() {
@@ -76,6 +85,72 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  Future<void> _openAddScheduleSheet(_CalendarData data) async {
+    final accessToken = context.read<AuthProvider>().accessToken;
+
+    if (accessToken == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('로그인이 필요합니다.')));
+      return;
+    }
+
+    if (data.trips.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('먼저 여행방을 만들어주세요.')));
+      return;
+    }
+
+    final draft = await showModalBottomSheet<_ScheduleDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _AddScheduleSheet(trips: data.trips, initialDate: _selectedDay);
+      },
+    );
+
+    if (draft == null || !mounted) {
+      return;
+    }
+
+    try {
+      await ScheduleService.createScheduleFromInput(
+        accessToken: accessToken,
+        tripId: draft.tripId,
+        title: draft.title,
+        scheduledDate: draft.scheduledDate,
+        category: draft.category,
+        scheduledTime: draft.scheduledTime,
+        placeName: draft.placeName,
+        url: draft.url,
+        description: draft.description,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedDay = draft.scheduledDate;
+        _focusedMonth = DateTime(
+          draft.scheduledDate.year,
+          draft.scheduledDate.month,
+        );
+        _calendarFuture = _loadCalendar(accessToken);
+        _loadedAccessToken = accessToken;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('일정을 추가했어요.')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -114,7 +189,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             return ListView(
                               padding: context.insetsFromLTRB(18, 8, 18, 88),
                               children: [
-                                const _CalendarHeader(),
+                                _CalendarHeader(
+                                  onAdd: () => _openAddScheduleSheet(data),
+                                ),
                                 const ResponsiveGap(height: 14),
                                 _MonthControl(
                                   focusedMonth: _focusedMonth,
@@ -184,7 +261,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 }
 
 class _CalendarHeader extends StatelessWidget {
-  const _CalendarHeader();
+  const _CalendarHeader({required this.onAdd});
+
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -222,7 +301,7 @@ class _CalendarHeader extends StatelessWidget {
                 ),
                 const ResponsiveGap(height: 2),
                 Text(
-                  '개인 일정과 공유 여행을 한눈에',
+                  '공유 여행 일정을 한눈에',
                   style: TextStyle(
                     color: const Color(0xFF60706D),
                     fontSize: context.rs(11),
@@ -234,9 +313,9 @@ class _CalendarHeader extends StatelessWidget {
             ),
           ),
           _CircleIconButton(
-            icon: Icons.tune_rounded,
+            icon: Icons.add_rounded,
             iconSize: 18,
-            onTap: () {},
+            onTap: onAdd,
           ),
         ],
       ),
@@ -827,6 +906,348 @@ class _CalendarStateCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _AddScheduleSheet extends StatefulWidget {
+  const _AddScheduleSheet({required this.trips, required this.initialDate});
+
+  final List<Trip> trips;
+  final DateTime initialDate;
+
+  @override
+  State<_AddScheduleSheet> createState() => _AddScheduleSheetState();
+}
+
+class _AddScheduleSheetState extends State<_AddScheduleSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _placeController = TextEditingController();
+  final _urlController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  int? _tripId;
+  DateTime _scheduledDate = DateTime.now();
+  TimeOfDay? _scheduledTime;
+  String _category = '관광';
+
+  @override
+  void initState() {
+    super.initState();
+    _tripId = widget.trips.first.id;
+    _scheduledDate = widget.initialDate;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _placeController.dispose();
+    _urlController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _scheduledDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+
+    if (picked == null) {
+      return;
+    }
+
+    setState(() => _scheduledDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _scheduledTime ?? TimeOfDay.now(),
+    );
+
+    if (picked == null) {
+      return;
+    }
+
+    setState(() => _scheduledTime = picked);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate() || _tripId == null) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ScheduleDraft(
+        tripId: _tripId!,
+        title: _titleController.text.trim(),
+        category: _category,
+        scheduledDate: _scheduledDate,
+        scheduledTime: _scheduledTime == null
+            ? null
+            : _formatTimeOfDay(_scheduledTime!),
+        placeName: _nullIfBlank(_placeController.text),
+        url: _nullIfBlank(_urlController.text),
+        description: _nullIfBlank(_descriptionController.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: context.rs(650)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7FAF9),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(context.rs(22)),
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: context.insetsFromLTRB(18, 16, 18, 18),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '일정 추가',
+                        style: TextStyle(
+                          color: const Color(0xFF152523),
+                          fontSize: context.rs(18),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _CircleIconButton(
+                      icon: Icons.close_rounded,
+                      iconSize: 18,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const ResponsiveGap(height: 14),
+                _SheetFieldLabel('여행'),
+                DropdownButtonFormField<int>(
+                  initialValue: _tripId,
+                  items: widget.trips
+                      .map(
+                        (trip) => DropdownMenuItem<int>(
+                          value: trip.id,
+                          child: Text(
+                            trip.title,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _tripId = value),
+                  decoration: _sheetInputDecoration(context),
+                ),
+                const ResponsiveGap(height: 10),
+                _SheetFieldLabel('제목'),
+                TextFormField(
+                  controller: _titleController,
+                  textInputAction: TextInputAction.next,
+                  decoration: _sheetInputDecoration(
+                    context,
+                    hintText: '예: 해운대 산책',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '일정 제목을 입력해주세요.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const ResponsiveGap(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PickerField(
+                        label: '날짜',
+                        value: _formatShortDate(_scheduledDate),
+                        icon: Icons.calendar_today_outlined,
+                        onTap: _pickDate,
+                      ),
+                    ),
+                    const ResponsiveGap(width: 8),
+                    Expanded(
+                      child: _PickerField(
+                        label: '시간',
+                        value: _scheduledTime == null
+                            ? '시간 미정'
+                            : _formatTimeOfDay(_scheduledTime!),
+                        icon: Icons.access_time_rounded,
+                        onTap: _pickTime,
+                      ),
+                    ),
+                  ],
+                ),
+                const ResponsiveGap(height: 10),
+                _SheetFieldLabel('카테고리'),
+                DropdownButtonFormField<String>(
+                  initialValue: _category,
+                  items: const ['관광', '식당', '숙소', '교통', '예약', '기타']
+                      .map(
+                        (category) => DropdownMenuItem<String>(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _category = value);
+                    }
+                  },
+                  decoration: _sheetInputDecoration(context),
+                ),
+                const ResponsiveGap(height: 10),
+                _SheetFieldLabel('장소'),
+                TextFormField(
+                  controller: _placeController,
+                  textInputAction: TextInputAction.next,
+                  decoration: _sheetInputDecoration(
+                    context,
+                    hintText: '장소명 또는 주소',
+                  ),
+                ),
+                const ResponsiveGap(height: 10),
+                _SheetFieldLabel('링크'),
+                TextFormField(
+                  controller: _urlController,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.next,
+                  decoration: _sheetInputDecoration(
+                    context,
+                    hintText: 'https://',
+                  ),
+                ),
+                const ResponsiveGap(height: 10),
+                _SheetFieldLabel('메모'),
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 3,
+                  decoration: _sheetInputDecoration(context, hintText: '일정 메모'),
+                ),
+                const ResponsiveGap(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: context.rs(46),
+                  child: FilledButton.icon(
+                    onPressed: _submit,
+                    icon: Icon(Icons.add_rounded, size: context.rs(18)),
+                    label: const Text('추가하기'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF148776),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(context.rs(12)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetFieldLabel extends StatelessWidget {
+  const _SheetFieldLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.rs(6)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: const Color(0xFF60706D),
+          fontSize: context.rs(11),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SheetFieldLabel(label),
+        Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(context.rs(12)),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(context.rs(12)),
+            child: Container(
+              height: context.rs(48),
+              padding: context.symmetricInsets(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFDCE6E3)),
+                borderRadius: BorderRadius.circular(context.rs(12)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    color: const Color(0xFF0B5F55),
+                    size: context.rs(16),
+                  ),
+                  const ResponsiveGap(width: 8),
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFF152523),
+                        fontSize: context.rs(12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1692,13 +2113,39 @@ const _freeSchedule = _TimelineStatus(
 );
 
 class _CalendarData {
-  _CalendarData({required this.schedules})
+  _CalendarData({required this.trips, required this.schedules})
     : agendaItems = schedules.map(_agendaItemFromSchedule).toList();
 
-  _CalendarData.empty() : schedules = const [], agendaItems = const [];
+  _CalendarData.empty()
+    : trips = const [],
+      schedules = const [],
+      agendaItems = const [];
 
+  final List<Trip> trips;
   final List<TripSchedule> schedules;
   final List<_AgendaItem> agendaItems;
+}
+
+class _ScheduleDraft {
+  const _ScheduleDraft({
+    required this.tripId,
+    required this.title,
+    required this.category,
+    required this.scheduledDate,
+    this.scheduledTime,
+    this.placeName,
+    this.url,
+    this.description,
+  });
+
+  final int tripId;
+  final String title;
+  final String category;
+  final DateTime scheduledDate;
+  final String? scheduledTime;
+  final String? placeName;
+  final String? url;
+  final String? description;
 }
 
 List<DateTime> _calendarDaysFor(DateTime month) {
@@ -1867,6 +2314,13 @@ String _formatShortDate(DateTime date) {
   return '${date.month}월 ${date.day}일';
 }
 
+String _formatTimeOfDay(TimeOfDay time) {
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+
+  return '$hour:$minute:00';
+}
+
 String _formatFullDate(DateTime date) {
   return '${date.month}월 ${date.day}일 ${_weekdayName(date)}요일';
 }
@@ -1880,6 +2334,41 @@ String _dateKey(DateTime date) {
   final day = date.day.toString().padLeft(2, '0');
 
   return '${date.year}-$month-$day';
+}
+
+String? _nullIfBlank(String value) {
+  final trimmed = value.trim();
+
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+InputDecoration _sheetInputDecoration(
+  BuildContext context, {
+  String? hintText,
+}) {
+  return InputDecoration(
+    hintText: hintText,
+    hintStyle: const TextStyle(color: Color(0xFF8A9895)),
+    filled: true,
+    fillColor: Colors.white,
+    contentPadding: context.symmetricInsets(horizontal: 12, vertical: 13),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(context.rs(12)),
+      borderSide: const BorderSide(color: Color(0xFFDCE6E3)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(context.rs(12)),
+      borderSide: const BorderSide(color: Color(0xFF148776), width: 1.4),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(context.rs(12)),
+      borderSide: const BorderSide(color: Color(0xFFF27864)),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(context.rs(12)),
+      borderSide: const BorderSide(color: Color(0xFFF27864), width: 1.4),
+    ),
+  );
 }
 
 bool _isSameDate(DateTime a, DateTime b) {

@@ -101,6 +101,63 @@ class ScheduleService {
     throw Exception('일정을 만들지 못했습니다. (${response.statusCode})');
   }
 
+  static Future<TripSchedule> createScheduleFromInput({
+    required String accessToken,
+    required int tripId,
+    required String title,
+    required DateTime scheduledDate,
+    required String category,
+    String? scheduledTime,
+    String? placeName,
+    String? url,
+    String? description,
+    int sortOrder = 0,
+  }) async {
+    final body = <String, dynamic>{
+      'title': title,
+      'category': category,
+      'scheduledDate': _formatDate(scheduledDate),
+      'sortOrder': sortOrder,
+    };
+
+    if (scheduledTime != null) {
+      body['scheduledTime'] = scheduledTime;
+    }
+
+    if (placeName != null && placeName.trim().isNotEmpty) {
+      body['placeName'] = placeName.trim();
+    }
+
+    if (url != null && url.trim().isNotEmpty) {
+      body['url'] = url.trim();
+    }
+
+    if (description != null && description.trim().isNotEmpty) {
+      body['description'] = description.trim();
+    }
+
+    final response = await http.post(
+      Uri.parse('${AuthService.baseUrl}/api/trips/$tripId/schedules'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return TripSchedule.fromJson(
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+      );
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    throw Exception('일정을 만들지 못했습니다. (${response.statusCode})');
+  }
+
   static Future<TripSchedule> updateSchedule({
     required String accessToken,
     required TripSchedule schedule,
@@ -169,5 +226,12 @@ class ScheduleService {
     }
 
     return left.id.compareTo(right.id);
+  }
+
+  static String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '${date.year}-$month-$day';
   }
 }
