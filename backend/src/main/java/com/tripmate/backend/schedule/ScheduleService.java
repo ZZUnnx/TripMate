@@ -4,6 +4,8 @@ import com.tripmate.backend.schedule.dto.ScheduleRequest;
 import com.tripmate.backend.schedule.dto.ScheduleResponse;
 import com.tripmate.backend.trip.Trip;
 import com.tripmate.backend.trip.TripRepository;
+import com.tripmate.backend.user.User;
+import com.tripmate.backend.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,13 +18,16 @@ public class ScheduleService {
 
     private final TripRepository tripRepository;
     private final ScheduleRepository scheduleRepository;
+    private final UserRepository userRepository;
 
     public ScheduleService(
             TripRepository tripRepository,
-            ScheduleRepository scheduleRepository
+            ScheduleRepository scheduleRepository,
+            UserRepository userRepository
     ) {
         this.tripRepository = tripRepository;
         this.scheduleRepository = scheduleRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -43,6 +48,11 @@ public class ScheduleService {
             ScheduleRequest request
     ) {
         Trip trip = findAccessibleTrip(tripId, userId);
+        User creator = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "사용자를 찾을 수 없습니다."
+                ));
         Schedule schedule = new Schedule(
                 trip,
                 request.title().trim(),
@@ -52,7 +62,8 @@ public class ScheduleService {
                 normalize(request.placeName()),
                 normalize(request.url()),
                 normalize(request.description()),
-                request.sortOrder()
+                request.sortOrder(),
+                creator
         );
 
         return ScheduleResponse.from(scheduleRepository.save(schedule));
