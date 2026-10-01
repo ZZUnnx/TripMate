@@ -738,32 +738,20 @@ class _CreateChatRoomSheet extends StatefulWidget {
 
 class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
   final _titleController = TextEditingController();
-  final _destinationController = TextEditingController();
 
-  DateTime? _startDate;
-  DateTime? _endDate;
   bool _isSaving = false;
 
   @override
   void dispose() {
     _titleController.dispose();
-    _destinationController.dispose();
     super.dispose();
   }
 
   Future<void> _createRoom() async {
     final title = _titleController.text.trim();
-    final destination = _destinationController.text.trim();
 
     if (title.isEmpty) {
       _showMessage('채팅방 이름을 입력해주세요.');
-      return;
-    }
-
-    if (_startDate != null &&
-        _endDate != null &&
-        _endDate!.isBefore(_startDate!)) {
-      _showMessage('종료일은 시작일보다 빠를 수 없습니다.');
       return;
     }
 
@@ -775,9 +763,6 @@ class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
       await ChatService.createChatRoom(
         accessToken: widget.accessToken,
         title: title,
-        destination: destination,
-        startDate: _startDate,
-        endDate: _endDate,
       );
 
       if (!mounted) {
@@ -796,36 +781,6 @@ class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
 
       _showMessage(e.toString());
     }
-  }
-
-  Future<void> _pickDate({required bool isStartDate}) async {
-    final now = DateTime.now();
-    final initialDate = isStartDate
-        ? _startDate ?? now
-        : _endDate ?? _startDate ?? now;
-
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 10),
-    );
-
-    if (!mounted || pickedDate == null) {
-      return;
-    }
-
-    setState(() {
-      if (isStartDate) {
-        _startDate = pickedDate;
-
-        if (_endDate != null && _endDate!.isBefore(pickedDate)) {
-          _endDate = pickedDate;
-        }
-      } else {
-        _endDate = pickedDate;
-      }
-    });
   }
 
   void _showMessage(String message) {
@@ -868,39 +823,8 @@ class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
               _SheetTextField(
                 controller: _titleController,
                 label: '채팅방 이름',
-                hint: '예: 제주도 여행',
-                textInputAction: TextInputAction.next,
-              ),
-              const ResponsiveGap(height: 14),
-              _SheetTextField(
-                controller: _destinationController,
-                label: '여행지',
-                hint: '예: 제주',
+                hint: '예: 테스트방',
                 textInputAction: TextInputAction.done,
-              ),
-              const ResponsiveGap(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DateSelectButton(
-                      label: '시작일',
-                      value: _formatDateLabel(_startDate),
-                      onTap: _isSaving
-                          ? null
-                          : () => _pickDate(isStartDate: true),
-                    ),
-                  ),
-                  const ResponsiveGap(width: 10),
-                  Expanded(
-                    child: _DateSelectButton(
-                      label: '종료일',
-                      value: _formatDateLabel(_endDate),
-                      onTap: _isSaving
-                          ? null
-                          : () => _pickDate(isStartDate: false),
-                    ),
-                  ),
-                ],
               ),
               const ResponsiveGap(height: 24),
               SizedBox(
@@ -909,7 +833,7 @@ class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
                 child: FilledButton(
                   onPressed: _isSaving ? null : _createRoom,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF635BFF),
+                    backgroundColor: const Color(0xFF148776),
                     foregroundColor: Colors.white,
                   ),
                   child: _isSaving
@@ -932,17 +856,6 @@ class _CreateChatRoomSheetState extends State<_CreateChatRoomSheet> {
         ),
       ),
     );
-  }
-
-  String _formatDateLabel(DateTime? date) {
-    if (date == null) {
-      return '선택';
-    }
-
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '${date.year}.$month.$day';
   }
 }
 
@@ -972,54 +885,6 @@ class _SheetTextField extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(context.rs(14)),
           borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-}
-
-class _DateSelectButton extends StatelessWidget {
-  const _DateSelectButton({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.calendar_month_rounded),
-      label: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: context.rs(12),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: context.rs(14),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-      style: OutlinedButton.styleFrom(
-        alignment: Alignment.centerLeft,
-        foregroundColor: const Color(0xFF121827),
-        padding: context.symmetricInsets(horizontal: 12, vertical: 12),
-        side: const BorderSide(color: Color(0xFFE0E3EE)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(context.rs(14)),
         ),
       ),
     );

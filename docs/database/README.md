@@ -40,12 +40,14 @@
 | ----------- | ------------ | ----------------------- | ------- |
 | id          | BIGINT       | PK, AUTO_INCREMENT      | 여행방 ID  |
 | title       | VARCHAR(100) | NOT NULL                | 여행방 제목  |
-| destination | VARCHAR(100) | NOT NULL                | 여행 목적지  |
-| start_date  | DATE         | NOT NULL                | 여행 시작일  |
-| end_date    | DATE         | NOT NULL                | 여행 종료일  |
+| destination | VARCHAR(100) | NULL                    | 여행 목적지  |
+| start_date  | DATE         | NULL                    | 여행 시작일  |
+| end_date    | DATE         | NULL                    | 여행 종료일  |
 | owner_id    | BIGINT       | FK → users.id, NOT NULL | 여행방 생성자 |
-| created     | DATETIME     | NOT NULL                | 생성 시간   |
-| updated     | DATETIME     | NOT NULL                | 수정 시간   |
+| created_at  | DATETIME     | NOT NULL                | 생성 시간   |
+| updated_at  | DATETIME     | NOT NULL                | 수정 시간   |
+
+> 2026-10-01 구현 기준: 채팅방 생성 화면은 `title`만 입력받는다. 따라서 `destination`, `start_date`, `end_date`는 NULL 허용이 필요하다. 기존 DB에 `created`, `updated` 컬럼이 남아있다면 예전 설계 컬럼이며 현재 JPA 엔티티는 `created_at`, `updated_at`을 사용한다.
 
 ---
 
@@ -99,6 +101,14 @@
 ## 6. schedules (확정된 일정)
 
 > 2026-10-01 구현 기준: 현재 JPA 엔티티와 API는 기존 DB 설계와 맞추기 위해 `schedule_date`, `start_time`, `place_name`, `memo`, `created_by`, `sort_order` 필드를 사용한다. `end_time`, `address`는 아직 화면/API에서 사용하지 않는다.
+> 기존 운영 DB에 `scheduled_date`, `scheduled_time`, `description` 중복 컬럼이 남아있다면 현재 엔티티 기준에서는 제거 대상이다.
+
+```sql
+ALTER TABLE schedules
+DROP COLUMN scheduled_date,
+DROP COLUMN scheduled_time,
+DROP COLUMN description;
+```
 
 | 컬럼            | 타입           | 제약조건                    | 설명       |
 | ------------- | ------------ | ----------------------- | -------- |

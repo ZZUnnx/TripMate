@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/trip.dart';
+import '../../models/trip_member.dart';
 import '../../models/trip_schedule.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/chat_service.dart';
 import '../../services/schedule_service.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/home/bottom_navigation.dart';
@@ -75,7 +77,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _TripCalendarDetailScreen(
+        builder: (_) => TripCalendarDetailScreen(
           currentIndex: widget.currentIndex,
           onNavigationSelected: widget.onNavigationSelected,
           schedules: tripSchedules,
@@ -1287,12 +1289,13 @@ class _CircleIconButton extends StatelessWidget {
   }
 }
 
-class _TripCalendarDetailScreen extends StatelessWidget {
-  const _TripCalendarDetailScreen({
+class TripCalendarDetailScreen extends StatelessWidget {
+  const TripCalendarDetailScreen({
     required this.currentIndex,
     required this.onNavigationSelected,
     required this.schedules,
     required this.selectedSchedule,
+    super.key,
   });
 
   final int currentIndex;
@@ -1320,6 +1323,13 @@ class _TripCalendarDetailScreen extends StatelessWidget {
     final timelineSections = _timelineSectionsFromSchedules(schedules);
     final timeRange = _timeRangeFor(schedules);
     final dateRange = _tripDateRange(selectedSchedule);
+    final accessToken = context.watch<AuthProvider>().accessToken;
+    final membersFuture = accessToken == null
+        ? null
+        : ChatService.fetchMembers(
+            accessToken: accessToken,
+            tripId: selectedSchedule.tripId,
+          );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -1356,13 +1366,17 @@ class _TripCalendarDetailScreen extends StatelessWidget {
                               scheduleCount: schedules.length,
                               destination:
                                   selectedSchedule.tripDestination ?? '여행 일정',
+                              membersFuture: membersFuture,
                             ),
                             const ResponsiveGap(height: 8),
                             _CalendarViewAction(
                               onTap: () => Navigator.of(context).pop(),
                             ),
                             const ResponsiveGap(height: 8),
-                            const _CostSummaryCard(),
+                            _CostSummaryCard(
+                              totalAmount: 0,
+                              participantCount: null,
+                            ),
                             const ResponsiveGap(height: 8),
                             _TimelineHeading(timeRange: timeRange),
                             const ResponsiveGap(height: 8),
@@ -1494,11 +1508,13 @@ class _DayOverviewCard extends StatelessWidget {
     required this.dateRange,
     required this.scheduleCount,
     required this.destination,
+    required this.membersFuture,
   });
 
   final String dateRange;
   final int scheduleCount;
   final String destination;
+  final Future<List<TripMember>>? membersFuture;
 
   @override
   Widget build(BuildContext context) {
@@ -1552,14 +1568,26 @@ class _DayOverviewCard extends StatelessWidget {
             ),
           ),
           const ResponsiveGap(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              _ParticipantAvatars(),
-              ResponsiveGap(height: 4),
-              _TinyMutedText('4명 모두 참여'),
-            ],
+          FutureBuilder<List<TripMember>>(
+            future: membersFuture,
+            builder: (context, snapshot) {
+              final members = snapshot.data ?? const <TripMember>[];
+              final label = snapshot.connectionState == ConnectionState.waiting
+                  ? '참여자 확인 중'
+                  : members.isEmpty
+                  ? '참여자 정보 없음'
+                  : '${members.length}명 참여';
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ParticipantAvatars(members: members),
+                  const ResponsiveGap(height: 4),
+                  _TinyMutedText(label),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -1568,44 +1596,64 @@ class _DayOverviewCard extends StatelessWidget {
 }
 
 class _ParticipantAvatars extends StatelessWidget {
-  const _ParticipantAvatars();
+  const _ParticipantAvatars({required this.members});
+
+  final List<TripMember> members;
 
   @override
   Widget build(BuildContext context) {
-    const avatars = [
-      ('민', Color(0xFFDDEEF9)),
-      ('서', Color(0xFFFFE8D9)),
-      ('준', Color(0xFFE9E1F5)),
-      ('나', Color(0xFFDDF3EE)),
-    ];
+    final avatars = members.take(4).toList();
 
     return SizedBox(
       width: context.rs(83),
       height: context.rs(26),
       child: Stack(
         children: [
-          for (var index = 0; index < avatars.length; index++)
+          if (avatars.isEmpty)
             Positioned(
-              left: context.rs(index * 19),
+              right: 0,
               child: Container(
                 width: context.rs(26),
                 height: context.rs(26),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: avatars[index].$2,
+                  color: const Color(0xFFDDF3EE),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: context.rs(2)),
                 ),
-                child: Text(
-                  avatars[index].$1,
-                  style: TextStyle(
-                    color: const Color(0xFF152523),
-                    fontSize: context.rs(10),
-                    fontWeight: FontWeight.w600,
+                child: Icon(
+                  Icons.group_outlined,
+                  color: const Color(0xFF0B5F55),
+                  size: context.rs(13),
+                ),
+              ),
+            )
+          else
+            for (var index = 0; index < avatars.length; index++)
+              Positioned(
+                left: context.rs(index * 19),
+                child: Container(
+                  width: context.rs(26),
+                  height: context.rs(26),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _avatarColor(index),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: context.rs(2),
+                    ),
+                  ),
+                  child: Text(
+                    _avatarInitial(avatars[index].nickname),
+                    style: TextStyle(
+                      color: const Color(0xFF152523),
+                      fontSize: context.rs(10),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
         ],
       ),
     );
@@ -1628,6 +1676,76 @@ class _TinyMutedText extends StatelessWidget {
         fontSize: context.rs(10),
         fontWeight: FontWeight.w400,
       ),
+    );
+  }
+}
+
+class _DetailInfoRow extends StatelessWidget {
+  const _DetailInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.maxLines = 1,
+    this.actionIcon,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final int maxLines;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFF60706D), size: context.rs(14)),
+        const ResponsiveGap(width: 7),
+        SizedBox(
+          width: context.rs(34),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: const Color(0xFF8A9895),
+              fontSize: context.rs(10),
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+        ),
+        const ResponsiveGap(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xFF152523),
+              fontSize: context.rs(11),
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+            ),
+          ),
+        ),
+        if (actionIcon != null && onAction != null) ...[
+          const ResponsiveGap(width: 8),
+          InkWell(
+            onTap: onAction,
+            borderRadius: BorderRadius.circular(context.rs(999)),
+            child: Padding(
+              padding: EdgeInsets.all(context.rs(2)),
+              child: Icon(
+                actionIcon,
+                color: const Color(0xFF0B5F55),
+                size: context.rs(14),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1687,10 +1805,22 @@ class _CalendarViewAction extends StatelessWidget {
 }
 
 class _CostSummaryCard extends StatelessWidget {
-  const _CostSummaryCard();
+  const _CostSummaryCard({
+    required this.totalAmount,
+    required this.participantCount,
+  });
+
+  final int totalAmount;
+  final int? participantCount;
 
   @override
   Widget build(BuildContext context) {
+    final safeParticipantCount =
+        participantCount == null || participantCount! <= 0
+        ? 1
+        : participantCount!;
+    final perPersonAmount = totalAmount ~/ safeParticipantCount;
+
     return Container(
       padding: context.symmetricInsets(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -1709,7 +1839,7 @@ class _CostSummaryCard extends StatelessWidget {
               ),
               const ResponsiveGap(width: 6),
               Text(
-                '일정 정산',
+                '확정 비용 합계',
                 style: TextStyle(
                   color: const Color(0xFF0B5F55),
                   fontSize: context.rs(11),
@@ -1724,7 +1854,7 @@ class _CostSummaryCard extends StatelessWidget {
             children: [
               const _TinyMutedText('총액'),
               Text(
-                '준비 중',
+                _formatWon(totalAmount),
                 style: TextStyle(
                   color: const Color(0xFF0B5F55),
                   fontSize: context.rs(15),
@@ -1736,13 +1866,15 @@ class _CostSummaryCard extends StatelessWidget {
           const ResponsiveGap(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              _TinyMutedText('연결 상태'),
-              _TinyMutedText('정산 화면에서 관리'),
+            children: [
+              const _TinyMutedText('1인 기준'),
+              _TinyMutedText(_formatWon(perPersonAmount)),
             ],
           ),
           const ResponsiveGap(height: 8),
-          const _TinyMutedText('확정 일정의 비용 연결은 정산 기능에서 이어집니다.'),
+          _TinyMutedText(
+            totalAmount == 0 ? '연동된 비용이 없어 0원으로 표시됩니다.' : '확정된 비용만 합계에 포함됩니다.',
+          ),
         ],
       ),
     );
@@ -1846,14 +1978,27 @@ class _TimelineSection extends StatelessWidget {
   }
 }
 
-class _TimelineRow extends StatelessWidget {
+class _TimelineRow extends StatefulWidget {
   const _TimelineRow({required this.item, required this.isLast});
 
   final _TripTimelineEntry item;
   final bool isLast;
 
   @override
+  State<_TimelineRow> createState() => _TimelineRowState();
+}
+
+class _TimelineRowState extends State<_TimelineRow>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final schedule = item.schedule;
+    final memo = schedule.description;
+    final url = schedule.url;
+
     return Padding(
       padding: EdgeInsets.only(bottom: context.rs(5)),
       child: IntrinsicHeight(
@@ -1885,7 +2030,7 @@ class _TimelineRow extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  if (!isLast)
+                  if (!widget.isLast)
                     Expanded(
                       child: Container(
                         width: context.rs(2),
@@ -1898,83 +2043,212 @@ class _TimelineRow extends StatelessWidget {
             ),
             const ResponsiveGap(width: 7),
             Expanded(
-              child: Container(
-                padding: context.symmetricInsets(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFDCE6E3)),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(context.rs(12)),
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
                   borderRadius: BorderRadius.circular(context.rs(12)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      width: double.infinity,
+                      padding: context.symmetricInsets(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFDCE6E3)),
+                        borderRadius: BorderRadius.circular(context.rs(12)),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: const Color(0xFF152523),
-                              fontSize: context.rs(12),
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                          const ResponsiveGap(height: 4),
                           Row(
                             children: [
-                              Icon(
-                                Icons.location_on_outlined,
-                                color: const Color(0xFF60706D),
-                                size: context.rs(10),
-                              ),
-                              const ResponsiveGap(width: 4),
                               Expanded(
-                                child: Text(
-                                  item.place,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: const Color(0xFF60706D),
-                                    fontSize: context.rs(10),
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      maxLines: _expanded ? 2 : 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: const Color(0xFF152523),
+                                        fontSize: context.rs(12),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const ResponsiveGap(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.location_on_outlined,
+                                          color: const Color(0xFF60706D),
+                                          size: context.rs(10),
+                                        ),
+                                        const ResponsiveGap(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            item.place,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: const Color(0xFF60706D),
+                                              fontSize: context.rs(10),
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const ResponsiveGap(width: 7),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _StatusPill(
+                                    label: item.status.label,
+                                    foreground: item.status.foreground,
+                                    background: item.status.background,
+                                  ),
+                                  const ResponsiveGap(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        item.cost,
+                                        style: TextStyle(
+                                          color: const Color(0xFF152523),
+                                          fontSize: context.rs(10),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const ResponsiveGap(width: 3),
+                                      Icon(
+                                        _expanded
+                                            ? Icons.expand_less_rounded
+                                            : Icons.expand_more_rounded,
+                                        color: const Color(0xFF8A9895),
+                                        size: context.rs(14),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ],
+                          ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            reverseDuration: const Duration(milliseconds: 200),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) {
+                              return SizeTransition(
+                                sizeFactor: animation,
+                                alignment: Alignment.topCenter,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _expanded
+                                ? _TimelineDetailContent(
+                                    key: ValueKey(item.schedule.id),
+                                    item: item,
+                                    schedule: schedule,
+                                    memo: memo,
+                                    url: url,
+                                  )
+                                : const SizedBox.shrink(
+                                    key: ValueKey('collapsed'),
+                                  ),
                           ),
                         ],
                       ),
                     ),
-                    const ResponsiveGap(width: 7),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _StatusPill(
-                          label: item.status.label,
-                          foreground: item.status.foreground,
-                          background: item.status.background,
-                        ),
-                        const ResponsiveGap(height: 4),
-                        Text(
-                          item.cost,
-                          style: TextStyle(
-                            color: const Color(0xFF152523),
-                            fontSize: context.rs(10),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TimelineDetailContent extends StatelessWidget {
+  const _TimelineDetailContent({
+    required super.key,
+    required this.item,
+    required this.schedule,
+    required this.memo,
+    required this.url,
+  });
+
+  final _TripTimelineEntry item;
+  final TripSchedule schedule;
+  final String? memo;
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const ResponsiveGap(height: 9),
+        const Divider(height: 1, thickness: 1, color: Color(0xFFE7EFEC)),
+        const ResponsiveGap(height: 9),
+        _DetailInfoRow(
+          icon: Icons.event_outlined,
+          label: '날짜',
+          value: _formatFullDate(schedule.scheduledDate),
+        ),
+        const ResponsiveGap(height: 7),
+        _DetailInfoRow(
+          icon: Icons.access_time_rounded,
+          label: '시간',
+          value: _formatScheduleTime(schedule.scheduledTime),
+        ),
+        const ResponsiveGap(height: 7),
+        _DetailInfoRow(
+          icon: Icons.location_on_outlined,
+          label: '장소',
+          value: item.place,
+        ),
+        if (memo != null && memo!.trim().isNotEmpty) ...[
+          const ResponsiveGap(height: 7),
+          _DetailInfoRow(
+            icon: Icons.notes_rounded,
+            label: '메모',
+            value: memo!,
+            maxLines: 3,
+          ),
+        ],
+        if (url != null && url!.trim().isNotEmpty) ...[
+          const ResponsiveGap(height: 7),
+          _DetailInfoRow(
+            icon: Icons.link_rounded,
+            label: '링크',
+            value: url!,
+            actionIcon: Icons.copy_rounded,
+            onAction: () {
+              Clipboard.setData(ClipboardData(text: url!));
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('링크를 복사했어요.')));
+            },
+          ),
+        ],
+      ],
     );
   }
 }
@@ -2068,6 +2342,7 @@ class _TimelineDateSection {
 
 class _TripTimelineEntry {
   const _TripTimelineEntry({
+    required this.schedule,
     required this.time,
     required this.title,
     required this.place,
@@ -2076,6 +2351,7 @@ class _TripTimelineEntry {
     required this.dotColor,
   });
 
+  final TripSchedule schedule;
   final String time;
   final String title;
   final String place;
@@ -2099,12 +2375,6 @@ class _TimelineStatus {
 const _travelColor = Color(0xFF148776);
 const _personalColor = Color(0xFF8067B8);
 const _freeColor = Color(0xFF4E79C7);
-
-const _placeConfirmed = _TimelineStatus(
-  label: '장소 확정',
-  foreground: Color(0xFF2F9D69),
-  background: Color(0xFFE5F6EE),
-);
 
 const _freeSchedule = _TimelineStatus(
   label: '자유 일정',
@@ -2233,10 +2503,17 @@ _TripTimelineEntry _timelineEntryFromSchedule(TripSchedule schedule) {
   final dotColor = category == '개인' ? _personalColor : _travelColor;
 
   return _TripTimelineEntry(
+    schedule: schedule,
     time: _formatScheduleTime(schedule.scheduledTime),
     title: schedule.title,
     place: schedule.placeName ?? schedule.description ?? '장소 미정',
-    status: category == '개인' ? _freeSchedule : _placeConfirmed,
+    status: category == '개인'
+        ? _freeSchedule
+        : _TimelineStatus(
+            label: schedule.category,
+            foreground: const Color(0xFF0B5F55),
+            background: const Color(0xFFDDF3EE),
+          ),
     cost: '비용 미정',
     dotColor: dotColor,
   );
@@ -2325,6 +2602,15 @@ String _formatFullDate(DateTime date) {
   return '${date.month}월 ${date.day}일 ${_weekdayName(date)}요일';
 }
 
+String _formatWon(int amount) {
+  final value = amount.toString().replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (match) => ',',
+  );
+
+  return '$value원';
+}
+
 String _weekdayName(DateTime date) {
   return const ['월', '화', '수', '목', '금', '토', '일'][date.weekday - 1];
 }
@@ -2340,6 +2626,27 @@ String? _nullIfBlank(String value) {
   final trimmed = value.trim();
 
   return trimmed.isEmpty ? null : trimmed;
+}
+
+String _avatarInitial(String nickname) {
+  final trimmed = nickname.trim();
+
+  if (trimmed.isEmpty) {
+    return '?';
+  }
+
+  return trimmed.characters.first;
+}
+
+Color _avatarColor(int index) {
+  const colors = [
+    Color(0xFFDDF3EE),
+    Color(0xFFDDEEF9),
+    Color(0xFFFFE8D9),
+    Color(0xFFE9E1F5),
+  ];
+
+  return colors[index % colors.length];
 }
 
 InputDecoration _sheetInputDecoration(
