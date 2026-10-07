@@ -993,6 +993,15 @@ class _AiSummarySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final schedules =
+        items.where((item) => item['type'] == 'SCHEDULE').toList();
+
+    final reservations =
+        items.where((item) => item['type'] == 'RESERVATION').toList();
+        
+     final settlements =
+        items.where((item) => item['type'] == 'SETTLEMENT').toList();
+
     return SafeArea(
       child: Padding(
         padding: context.insetsFromLTRB(22, 14, 22, 24),
@@ -1045,23 +1054,49 @@ class _AiSummarySheet extends StatelessWidget {
               ),
             ),
             const ResponsiveGap(height: 18),
-            const _SummaryItem(
-              icon: Icons.calendar_month_rounded,
-              title: '일정',
-              content: '9/13 12:00 점심\n9/13 14:00 성산일출봉',
-            ),
-            const ResponsiveGap(height: 12),
-            const _SummaryItem(
-              icon: Icons.hotel_rounded,
-              title: '예약',
-              content: '제주 하얏트 리젠시 · 9/12 - 9/15',
-            ),
-            const ResponsiveGap(height: 12),
-            const _SummaryItem(
-              icon: Icons.payments_rounded,
-              title: '정산',
-              content: '렌터카 70,000원 · 4명 분담',
-            ),
+
+            if (schedules.isNotEmpty)
+              _SummaryItem(
+                icon: Icons.calendar_month_rounded,
+                title: '일정',
+                content: _buildScheduleContent(schedules),
+              ),
+
+            if (schedules.isNotEmpty && reservations.isNotEmpty)
+              const ResponsiveGap(height: 12),
+
+            if (reservations.isNotEmpty)
+              _SummaryItem(
+                icon: Icons.hotel_rounded,
+                title: '예약',
+                content: _buildReservationContent(reservations),
+              ),
+            if ((schedules.isNotEmpty || reservations.isNotEmpty) &&
+                settlements.isNotEmpty)
+              const ResponsiveGap(height: 12),
+
+            if (settlements.isNotEmpty)
+             _SummaryItem(
+                icon: Icons.payments_rounded,
+                title: '정산',
+                content: _buildSettlementContent(settlements),
+                ),
+
+            if (items.isEmpty)
+              Center(
+                child: Padding(
+                  padding: context.symmetricInsets(vertical: 24),
+                  child: Text(
+                    '대화에서 등록할 항목을 찾지 못했습니다.',
+                    style: TextStyle(
+                      color: const Color(0xFF66708E),
+                      fontSize: context.rs(14),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+
             const ResponsiveGap(height: 22),
             Row(
               children: [
@@ -1093,6 +1128,93 @@ class _AiSummarySheet extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+  String _buildScheduleContent(List<dynamic> schedules) {
+    return schedules.map((item) {
+      final date = _formatDate(item['date']);
+      final time = item['time']?.toString();
+      final title = item['title']?.toString() ?? '일정';
+
+      final parts = <String>[];
+
+       if (date != null) {
+        parts.add(date);
+       }
+
+       if (time != null && time.isNotEmpty) {
+        parts.add(time);
+       }
+
+       parts.add(title);
+
+       return parts.join(' ');
+    }).join('\n');
+  }
+  
+  String _buildReservationContent(List<dynamic> reservations) {
+    return reservations.map((item) {
+      final title = item['title']?.toString() ?? '예약';
+
+      final startDate = _formatDate(item['date']);
+      final endDate = _formatDate(item['endDate']);
+
+      if (startDate != null && endDate != null) {
+        return '$title · $startDate - $endDate';
+      }
+      if (startDate != null) {
+        return '$title · $startDate';
+      }
+
+      return title;
+    }).join('\n');
+  }
+
+  String _buildSettlementContent(List<dynamic> settlements) {
+    return settlements.map((item) {
+      final title = item['title']?.toString() ?? '정산';
+
+      final amount = item['amount'];
+      final peopleCount = item['peopleCount'];
+
+      final parts = <String>[title];
+
+      if (amount != null) {
+        parts.add('${_formatAmount(amount)}원');
+      }
+
+      if (peopleCount != null) {
+        parts.add('$peopleCount명 분담');
+      }
+
+      return parts.join(' · ');
+    }).join('\n');
+  }
+
+  String? _formatDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final date = DateTime.tryParse(value.toString());
+
+    if (date == null) {
+      return value.toString();
+    }
+
+    return '${date.month}/${date.day}';
+  }
+
+  String _formatAmount(dynamic value) {
+    final number = int.tryParse(value.toString());
+
+    if (number == null) {
+      return value.toString();
+    }
+
+    return number.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => ',',
     );
   }
 }
