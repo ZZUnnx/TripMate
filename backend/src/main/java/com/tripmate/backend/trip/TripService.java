@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 public class TripService {
 
@@ -21,6 +23,14 @@ public class TripService {
     ) {
         this.tripRepository = tripRepository;
         this.userRepository = userRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<TripResponse> getTrips(Long userId) {
+        return tripRepository.findChatRoomsByUserId(userId)
+                .stream()
+                .map(TripResponse::from)
+                .toList();
     }
 
     @Transactional

@@ -1,6 +1,7 @@
 package com.tripmate.backend.schedule;
 
 import com.tripmate.backend.trip.Trip;
+import com.tripmate.backend.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,10 +34,11 @@ public class Schedule {
     private String category;
 
     // 일정 날짜
-    @Column(nullable = false)
+    @Column(name = "schedule_date", nullable = false)
     private LocalDate scheduledDate;
 
     // 일정 시간 (시간 미정일 수도 있음)
+    @Column(name = "start_time")
     private LocalTime scheduledTime;
 
     // 장소
@@ -48,18 +50,66 @@ public class Schedule {
     private String url;
 
     // 일정 설명
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "memo", columnDefinition = "TEXT")
     private String description;
 
     // 같은 날 일정 표시 순서
     @Column(nullable = false)
     private Integer sortOrder;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    public Schedule(
+            Trip trip,
+            String title,
+            String category,
+            LocalDate scheduledDate,
+            LocalTime scheduledTime,
+            String placeName,
+            String url,
+            String description,
+            Integer sortOrder,
+            User createdBy
+    ) {
+        this.trip = trip;
+        this.title = title;
+        this.category = category;
+        this.scheduledDate = scheduledDate;
+        this.scheduledTime = scheduledTime;
+        this.placeName = placeName;
+        this.url = url;
+        this.description = description;
+        this.sortOrder = sortOrder;
+        this.createdBy = createdBy;
+    }
+
+    public void update(
+            String title,
+            String category,
+            LocalDate scheduledDate,
+            LocalTime scheduledTime,
+            String placeName,
+            String url,
+            String description,
+            Integer sortOrder
+    ) {
+        this.title = title;
+        this.category = category;
+        this.scheduledDate = scheduledDate;
+        this.scheduledTime = scheduledTime;
+        this.placeName = placeName;
+        this.url = url;
+        this.description = description;
+        this.sortOrder = sortOrder;
+    }
 
     @PrePersist
     public void prePersist() {

@@ -17,15 +17,22 @@ class ChatMessage {
   final DateTime sentAt;
   final bool mine;
 
-  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+  factory ChatMessage.fromJson(
+    Map<String, dynamic> json, {
+    int? currentUserId,
+  }) {
+    final senderId = _readInt(json['senderId'], 'senderId');
+
     return ChatMessage(
       id: _readInt(json['id'], 'id'),
       tripId: _readInt(json['tripId'], 'tripId'),
-      senderId: _readInt(json['senderId'], 'senderId'),
+      senderId: senderId,
       senderNickname: _readString(json['senderNickname'], 'senderNickname'),
       content: _readString(json['content'], 'content'),
       sentAt: _readDateTime(json['sentAt']),
-      mine: json['mine'] == true,
+      mine: currentUserId == null
+          ? json['mine'] == true
+          : senderId == currentUserId,
     );
   }
 

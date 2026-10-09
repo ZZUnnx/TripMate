@@ -55,6 +55,11 @@ public class ChatRoomService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public void verifyChatRoomAccess(Long tripId, Long userId) {
+        findAccessibleTrip(tripId, userId);
+    }
+
     @Transactional
     public ChatMessageResponse sendMessage(
             Long tripId,
@@ -62,6 +67,24 @@ public class ChatRoomService {
             SendChatMessageRequest request
     ) {
         Trip trip = findAccessibleTrip(tripId, userId);
+        String content = request.content() == null
+                ? ""
+                : request.content().trim();
+
+        if (content.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Message content is required."
+            );
+        }
+
+        if (content.length() > 2000) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Message content is too long."
+            );
+        }
+
         User sender = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -70,7 +93,7 @@ public class ChatRoomService {
         ChatMessage message = new ChatMessage(
                 trip,
                 sender,
-                request.content().trim()
+                content
         );
 
         return ChatMessageResponse.from(chatMessageRepository.save(message), userId);
@@ -92,6 +115,7 @@ public class ChatRoomService {
                 lastMessage == null ? null : lastMessage.getContent(),
                 lastMessage == null ? null : lastMessage.getSender().getNickname(),
                 lastMessage == null ? null : lastMessage.getSentAt(),
+                trip.getCreatedAt(),
                 0,
                 false,
                 lastMessage != null
@@ -112,19 +136,21 @@ public class ChatRoomService {
     ) {
         LocalDateTime leftAt = left.lastMessageAt();
         LocalDateTime rightAt = right.lastMessageAt();
+        LocalDateTime leftRecentAt = leftAt == null ? left.createdAt() : leftAt;
+        LocalDateTime rightRecentAt = rightAt == null ? right.createdAt() : rightAt;
 
-        if (leftAt == null && rightAt == null) {
+        if (leftRecentAt == null && rightRecentAt == null) {
             return 0;
         }
 
-        if (leftAt == null) {
+        if (leftRecentAt == null) {
             return 1;
         }
 
-        if (rightAt == null) {
+        if (rightRecentAt == null) {
             return -1;
         }
 
-        return rightAt.compareTo(leftAt);
+        return rightRecentAt.compareTo(leftRecentAt);
     }
 }

@@ -13,6 +13,7 @@ public record ChatRoomResponse(
         String lastMessage,
         String lastSenderNickname,
         LocalDateTime lastMessageAt,
+        LocalDateTime createdAt,
         int unreadCount,
         boolean pinned,
         boolean aiSummaryAvailable
