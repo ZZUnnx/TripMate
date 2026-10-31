@@ -58,6 +58,16 @@ public class ScheduleController {
                 .body(scheduleService.createSchedule(tripId, userId, request));
     }
 
+    @PostMapping("/trips/{tripId}/schedules/import")
+    public ResponseEntity<ScheduleService.ImportResult> importSchedule(
+            @PathVariable Long tripId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody ScheduleRequest request
+    ) {
+        var result = scheduleService.importSchedule(tripId, authUserIdResolver.resolve(authorizationHeader), request);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result);
+    }
+
     @PatchMapping("/schedules/{scheduleId}")
     public ResponseEntity<ScheduleResponse> updateSchedule(
             @PathVariable Long scheduleId,

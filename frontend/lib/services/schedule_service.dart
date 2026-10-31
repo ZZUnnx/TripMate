@@ -7,6 +7,28 @@ import '../models/trip_schedule.dart';
 import 'auth_service.dart';
 
 class ScheduleService {
+  /// Returns false when the server found an existing matching schedule.
+  static Future<bool> importSchedule({
+    required String accessToken,
+    required int tripId,
+    required Map<String, dynamic> schedule,
+  }) async {
+    final response = await http.post(
+      Uri.parse('${AuthService.baseUrl}/api/trips/$tripId/schedules/import'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(schedule),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return (jsonDecode(utf8.decode(response.bodyBytes))
+              as Map<String, dynamic>)['created'] ==
+          true;
+    }
+    throw Exception('일정을 추가하지 못했습니다. (${response.statusCode})');
+  }
+
   static Future<List<Trip>> fetchTrips({required String accessToken}) async {
     final response = await http.get(
       Uri.parse('${AuthService.baseUrl}/api/trips'),

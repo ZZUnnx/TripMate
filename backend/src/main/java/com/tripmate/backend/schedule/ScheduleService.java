@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ScheduleService {
@@ -47,7 +48,37 @@ public class ScheduleService {
             Long userId,
             ScheduleRequest request
     ) {
-        Trip trip = findAccessibleTrip(tripId, userId);
+        Trip trip = lockAccessibleTrip(tripId, userId);
+        return saveSchedule(trip, userId, request);
+    }
+
+    public record ImportResult(boolean created, ScheduleResponse schedule) {}
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public ImportResult importSchedule(Long tripId, Long userId, ScheduleRequest request) {
+        Trip trip = lockAccessibleTrip(tripId, userId);
+        for (Schedule existing : scheduleRepository.findByTripIdOrderBySchedule(tripId)) {
+            if (Objects.equals(existing.getScheduledDate(), request.scheduledDate())
+                    && Objects.equals(existing.getScheduledTime(), request.scheduledTime())
+                    && comparisonText(existing.getTitle()).equals(comparisonText(request.title()))
+                    && comparisonText(existing.getPlaceName()).equals(comparisonText(request.placeName()))) {
+                return new ImportResult(false, ScheduleResponse.from(existing));
+            }
+        }
+        return new ImportResult(true, saveSchedule(trip, userId, request));
+    }
+
+    private Trip lockAccessibleTrip(Long tripId, Long userId) {
+        findAccessibleTrip(tripId, userId);
+        return tripRepository.findByIdForUpdate(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    private static String comparisonText(String value) {
+        return value == null ? "" : value.replaceAll("(?U)\\s+", "");
+    }
+
+    private ScheduleResponse saveSchedule(Trip trip, Long userId, ScheduleRequest request) {
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
