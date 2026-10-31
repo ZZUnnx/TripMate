@@ -1804,6 +1804,15 @@ class _AiSummarySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final schedules =
+        items.where((item) => item['type'] == 'SCHEDULE').toList();
+
+    final reservations =
+        items.where((item) => item['type'] == 'RESERVATION').toList();
+
+     final settlements =
+        items.where((item) => item['type'] == 'SETTLEMENT').toList();
+
     return SafeArea(
       top: false,
       child: Container(
@@ -1886,33 +1895,37 @@ class _AiSummarySheet extends StatelessWidget {
                         children: [
                           const _SummaryHeader(),
                           const ResponsiveGap(height: 8),
-                          const _SummaryItem(
-                            icon: Icons.calendar_month_outlined,
-                            iconBackground: Color(0xFFEAF0FB),
-                            label: '날짜 · 시간',
-                            value: '4월 19일(일) · 오전 9:00',
-                          ),
-                          const ResponsiveGap(height: 8),
-                          const _SummaryItem(
-                            icon: Icons.location_on_outlined,
-                            iconBackground: Color(0xFFFFF0EC),
-                            label: '장소',
-                            value: '성산항 여객터미널',
-                          ),
-                          const ResponsiveGap(height: 8),
-                          const _SummaryItem(
-                            icon: Icons.confirmation_num_outlined,
-                            iconBackground: Color(0xFFFFF6DF),
-                            label: '예약',
-                            value: '우도 왕복 배편 · 4명',
-                          ),
-                          const ResponsiveGap(height: 8),
-                          const _SummaryItem(
-                            icon: Icons.account_balance_wallet_outlined,
-                            iconBackground: Color(0xFFEEF3F2),
-                            label: '예산',
-                            value: '1인 10,500원 · 총 42,000원',
-                          ),
+                          if (schedules.isNotEmpty) ...[
+                            _SummaryItem(
+                              icon: Icons.calendar_month_outlined,
+                              iconBackground: const Color(0xFFEAF0FB),
+                              label: '일정',
+                              value: _buildScheduleContent(schedules),
+                            ),
+                            const ResponsiveGap(height: 8),
+                          ],
+                          if (reservations.isNotEmpty) ...[
+                            _SummaryItem(
+                              icon: Icons.confirmation_num_outlined,
+                              iconBackground: const Color(0xFFFFF6DF),
+                              label: '예약',
+                              value: _buildReservationContent(reservations),
+                            ),
+                            const ResponsiveGap(height: 8),
+                          ],
+                          if (settlements.isNotEmpty) ...[
+                            _SummaryItem(
+                              icon: Icons.account_balance_wallet_outlined,
+                              iconBackground: const Color(0xFFEEF3F2),
+                              label: '정산',
+                              value: _buildSettlementContent(settlements),
+                            ),
+                            const ResponsiveGap(height: 8),
+                          ],
+                          if (items.isEmpty) ...[
+                            const Text('대화에서 등록할 항목을 찾지 못했습니다.'),
+                            const ResponsiveGap(height: 8),
+                          ],
                           const ResponsiveGap(height: 8),
                           const _SummaryNotice(),
                           const ResponsiveGap(height: 8),
@@ -1928,9 +1941,97 @@ class _AiSummarySheet extends StatelessWidget {
                 ),
               ),
             ),
+
           ],
         ),
       ),
+    );
+  }
+  String _buildScheduleContent(List<dynamic> schedules) {
+    return schedules.map((item) {
+      final date = _formatDate(item['date']);
+      final time = item['time']?.toString();
+      final title = item['title']?.toString() ?? '일정';
+
+      final parts = <String>[];
+
+       if (date != null) {
+        parts.add(date);
+       }
+
+       if (time != null && time.isNotEmpty) {
+        parts.add(time);
+       }
+
+       parts.add(title);
+
+       return parts.join(' ');
+    }).join('\n');
+  }
+
+  String _buildReservationContent(List<dynamic> reservations) {
+    return reservations.map((item) {
+      final title = item['title']?.toString() ?? '예약';
+
+      final startDate = _formatDate(item['date']);
+      final endDate = _formatDate(item['endDate']);
+
+      if (startDate != null && endDate != null) {
+        return '$title · $startDate - $endDate';
+      }
+      if (startDate != null) {
+        return '$title · $startDate';
+      }
+
+      return title;
+    }).join('\n');
+  }
+
+  String _buildSettlementContent(List<dynamic> settlements) {
+    return settlements.map((item) {
+      final title = item['title']?.toString() ?? '정산';
+
+      final amount = item['amount'];
+      final peopleCount = item['peopleCount'];
+
+      final parts = <String>[title];
+
+      if (amount != null) {
+        parts.add('${_formatAmount(amount)}원');
+      }
+
+      if (peopleCount != null) {
+        parts.add('$peopleCount명 분담');
+      }
+
+      return parts.join(' · ');
+    }).join('\n');
+  }
+
+  String? _formatDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final date = DateTime.tryParse(value.toString());
+
+    if (date == null) {
+      return value.toString();
+    }
+
+    return '${date.month}/${date.day}';
+  }
+
+  String _formatAmount(dynamic value) {
+    final number = int.tryParse(value.toString());
+
+    if (number == null) {
+      return value.toString();
+    }
+
+    return number.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => ',',
     );
   }
 }
@@ -2082,8 +2183,6 @@ class _SummaryItem extends StatelessWidget {
                 const ResponsiveGap(height: 2),
                 Text(
                   value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: const Color(0xFF152523),
                     fontSize: context.rs(11),
