@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controllers/chat/chat_detail_controller.dart';
+import '../../controllers/chat/ai_summary_controller.dart';
 import '../../models/chat_message.dart';
 import '../../models/chat_room.dart';
 import '../../screens/calendar/trip_calendar_detail_screen.dart';
+import '../settlement/settlement_screen.dart';
 import '../../widgets/common/responsive.dart';
 
 import '../../widgets/chat/detail/chat_detail_header.dart';
@@ -153,13 +155,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       if (!mounted) return;
 
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
-        backgroundColor: Colors.transparent,
-        builder: (context) => AiSummarySheet(items: items),
+      final summaryController = AiSummaryController(
+        items: items,
+        tripId: widget.room.tripId,
+        accessToken: widget.accessToken,
       );
+      try {
+        final savedCount = await showModalBottomSheet<int>(
+          context: context,
+          isScrollControlled: true,
+          isDismissible: false,
+          enableDrag: false,
+          barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
+          backgroundColor: Colors.transparent,
+          builder: (context) => AiSummarySheet(controller: summaryController),
+        );
+        if (!mounted || savedCount == null) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('공유 일정 $savedCount개를 추가했어요. 캘린더에서 확인해 주세요.')),
+        );
+      } finally {
+        summaryController.dispose();
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -281,7 +298,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             onSharedSchedule: _openSharedSchedule,
                             onSettlement: () {
                               _closeRoomMenu();
-                              _showPreparingMessage('여행 정산');
+                              Navigator.of(context).push(MaterialPageRoute<void>(
+                                builder: (_) => SettlementScreen(
+                                  tripId: widget.room.tripId,
+                                  tripTitle: widget.room.title,
+                                  currentIndex: 1,
+                                ),
+                              ));
                             },
                             onFiles: () {
                               _closeRoomMenu();

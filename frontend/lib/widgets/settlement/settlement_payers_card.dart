@@ -1,24 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../models/settlement.dart';
+
 import '../common/responsive.dart';
-import 'presentation/settlement_sample_data.dart';
+import 'presentation/settlement_view_data.dart';
 import 'settlement_card_components.dart';
 
 class SettlementPayersCard extends StatelessWidget {
-  const SettlementPayersCard({super.key, required this.compact});
+  const SettlementPayersCard({
+    super.key,
+    required this.compact,
+    required this.data,
+  });
 
+  final SettlementData data;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final payers = compact
-        ? sampleSettlementPayers.take(3).toList()
-        : sampleSettlementPayers;
+    final rows = settlementPayerRows(data);
+    final payers = compact ? rows.take(3).toList() : rows;
 
     return SettlementCard(
       child: Column(
         children: [
-          const SettlementCardHeader(title: '결제자별 내역', action: '전체 4명'),
+          SettlementCardHeader(
+            title: '결제자별 내역',
+            action: '${data.members.length}명',
+          ),
           const ResponsiveGap(height: 9),
           ...List.generate(payers.length, (index) {
             return Padding(

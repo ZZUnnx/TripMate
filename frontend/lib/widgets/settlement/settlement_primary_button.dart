@@ -5,7 +5,7 @@ import '../common/responsive.dart';
 class SettlementPrimaryButton extends StatelessWidget {
   const SettlementPrimaryButton({super.key, required this.onTap});
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +27,7 @@ class SettlementPrimaryButton extends StatelessWidget {
               ),
               const ResponsiveGap(width: 7),
               Text(
-                '정산 완료로 표시',
+                '정산 결과 확인',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: context.rs(14),

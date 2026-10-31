@@ -1,14 +1,47 @@
 import 'package:flutter/material.dart';
 
+import '../../../controllers/chat/ai_summary_controller.dart';
 import '../../common/responsive.dart';
 
-class AiSummarySheet extends StatelessWidget {
-  const AiSummarySheet({super.key, required this.items});
+class AiSummarySheet extends StatefulWidget {
+  const AiSummarySheet({super.key, required this.controller});
 
-  final List<dynamic> items;
+  final AiSummaryController controller;
+
+  @override
+  State<AiSummarySheet> createState() => _AiSummarySheetState();
+}
+
+class _AiSummarySheetState extends State<AiSummarySheet> {
+  AiSummaryController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  Future<void> _saveSchedules() async {
+    final result = await controller.saveSchedules();
+    if (!mounted || result == null) return;
+    if (result.error == null && result.remainingCount == 0) {
+      Navigator.pop(context, result.savedCount);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final items = controller.items;
     final schedules = items
         .where((item) => item['type'] == 'SCHEDULE')
         .toList();
@@ -21,135 +54,170 @@ class AiSummarySheet extends StatelessWidget {
         .where((item) => item['type'] == 'SETTLEMENT')
         .toList();
 
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: context.rs(620),
-        padding: context.insetsFromLTRB(16, 12, 16, 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: const Border(top: BorderSide(color: Color(0xFFDCE6E3))),
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(context.rs(24)),
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: context.rs(44),
-              height: context.rs(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFDCE6E3),
-                borderRadius: BorderRadius.circular(context.rs(999)),
-              ),
+    return PopScope(
+      canPop: !controller.isSaving,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: context.rs(620),
+          padding: context.insetsFromLTRB(16, 12, 16, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: const Border(top: BorderSide(color: Color(0xFFDCE6E3))),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(context.rs(24)),
             ),
-            const ResponsiveGap(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: context.rs(44),
+                height: context.rs(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCE6E3),
+                  borderRadius: BorderRadius.circular(context.rs(999)),
+                ),
+              ),
+              const ResponsiveGap(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI 요약',
+                          style: TextStyle(
+                            color: const Color(0xFF152523),
+                            fontSize: context.rs(18),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const ResponsiveGap(height: 2),
+                        Text(
+                          '현재까지 대화에서 찾은 정보를 검토하고 공유 일정에 추가해 주세요',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF60706D),
+                            fontSize: context.rs(11),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _SheetCloseButton(
+                    onPressed: controller.isSaving
+                        ? null
+                        : () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const ResponsiveGap(height: 12),
+              Expanded(
+                child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'AI 요약',
-                        style: TextStyle(
-                          color: const Color(0xFF152523),
-                          fontSize: context.rs(18),
-                          fontWeight: FontWeight.w700,
+                      Container(
+                        padding: context.symmetricInsets(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7FAF9),
+                          border: Border.all(color: const Color(0xFFCDEAE4)),
+                          borderRadius: BorderRadius.circular(context.rs(12)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF18332E)
+                                  .withValues(alpha: 0.08),
+                              blurRadius: context.rs(24),
+                              offset: Offset(0, context.rs(8)),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _SummaryHeader(count: items.length),
+                            const ResponsiveGap(height: 8),
+                            if (schedules.isNotEmpty) ...[
+                              _SummaryItem(
+                                icon: Icons.calendar_month_outlined,
+                                iconBackground: const Color(0xFFEAF0FB),
+                                label: '일정',
+                                value: _buildScheduleContent(schedules),
+                              ),
+                              const ResponsiveGap(height: 8),
+                            ],
+                            if (reservations.isNotEmpty) ...[
+                              _SummaryItem(
+                                icon: Icons.confirmation_num_outlined,
+                                iconBackground: const Color(0xFFFFF6DF),
+                                label: '예약',
+                                value: _buildReservationContent(reservations),
+                              ),
+                              const ResponsiveGap(height: 8),
+                            ],
+                            if (settlements.isNotEmpty) ...[
+                              _SummaryItem(
+                                icon: Icons.account_balance_wallet_outlined,
+                                iconBackground: const Color(0xFFEEF3F2),
+                                label: '정산',
+                                value: _buildSettlementContent(settlements),
+                              ),
+                              const ResponsiveGap(height: 8),
+                            ],
+                            if (items.isEmpty) ...[
+                              const Text('대화에서 등록할 항목을 찾지 못했습니다.'),
+                              const ResponsiveGap(height: 8),
+                            ],
+                            const ResponsiveGap(height: 8),
+                            const _SummaryNotice(),
+                            const ResponsiveGap(height: 8),
+                            Text(
+                              '일정·예약 ${controller.eligibleCount}개를 추가할 수 있어요. '
+                              '정산 정보는 캘린더에 추가하지 않습니다.',
+                              style: TextStyle(fontSize: context.rs(11)),
+                            ),
+                            if (controller.skippedCount > 0)
+                              Text(
+                                '날짜·제목·시간을 확인할 수 없는 ${controller.skippedCount}개는 제외됩니다.',
+                                style: TextStyle(fontSize: context.rs(11)),
+                              ),
+                            if (controller.lastResult?.error != null) ...[
+                              const ResponsiveGap(height: 8),
+                              Text(
+                                '${controller.savedCount}개 저장됨 · 남은 ${controller.pendingCount}개를 다시 시도해 주세요.\n'
+                                '${controller.lastResult!.error}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: context.rs(11),
+                                ),
+                              ),
+                            ],
+                            const ResponsiveGap(height: 8),
+                            _SummaryPrimaryButton(
+                              isSaving: controller.isSaving,
+                              isRetry: controller.savedCount > 0,
+                              onTap:
+                                  controller.isSaving ||
+                                      controller.pendingCount == 0
+                                  ? null
+                                  : _saveSchedules,
+                            ),
+                          ],
                         ),
                       ),
-                      const ResponsiveGap(height: 2),
-                      Text(
-                        '현재까지 대화에서 찾은 정보를 검토하고 공유 일정에 추가해 주세요',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFF60706D),
-                          fontSize: context.rs(11),
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
+                      const ResponsiveGap(height: 12),
+                      _ReanalyzeButton(onTap: () {}),
                     ],
                   ),
                 ),
-                _SheetCloseButton(onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-            const ResponsiveGap(height: 12),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: context.symmetricInsets(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7FAF9),
-                        border: Border.all(color: const Color(0xFFCDEAE4)),
-                        borderRadius: BorderRadius.circular(context.rs(12)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF18332E)
-                                .withValues(alpha: 0.08),
-                            blurRadius: context.rs(24),
-                            offset: Offset(0, context.rs(8)),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          const _SummaryHeader(),
-                          const ResponsiveGap(height: 8),
-                          if (schedules.isNotEmpty) ...[
-                            _SummaryItem(
-                              icon: Icons.calendar_month_outlined,
-                              iconBackground: const Color(0xFFEAF0FB),
-                              label: '일정',
-                              value: _buildScheduleContent(schedules),
-                            ),
-                            const ResponsiveGap(height: 8),
-                          ],
-                          if (reservations.isNotEmpty) ...[
-                            _SummaryItem(
-                              icon: Icons.confirmation_num_outlined,
-                              iconBackground: const Color(0xFFFFF6DF),
-                              label: '예약',
-                              value: _buildReservationContent(reservations),
-                            ),
-                            const ResponsiveGap(height: 8),
-                          ],
-                          if (settlements.isNotEmpty) ...[
-                            _SummaryItem(
-                              icon: Icons.account_balance_wallet_outlined,
-                              iconBackground: const Color(0xFFEEF3F2),
-                              label: '정산',
-                              value: _buildSettlementContent(settlements),
-                            ),
-                            const ResponsiveGap(height: 8),
-                          ],
-                          if (items.isEmpty) ...[
-                            const Text('대화에서 등록할 항목을 찾지 못했습니다.'),
-                            const ResponsiveGap(height: 8),
-                          ],
-                          const ResponsiveGap(height: 8),
-                          const _SummaryNotice(),
-                          const ResponsiveGap(height: 8),
-                          _SummaryPrimaryButton(
-                            onTap: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const ResponsiveGap(height: 12),
-                    _ReanalyzeButton(onTap: () {}),
-                  ],
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -253,7 +321,7 @@ class AiSummarySheet extends StatelessWidget {
 class _SheetCloseButton extends StatelessWidget {
   const _SheetCloseButton({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -282,7 +350,9 @@ class _SheetCloseButton extends StatelessWidget {
 }
 
 class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader();
+  const _SummaryHeader({required this.count});
+
+  final int count;
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +377,7 @@ class _SummaryHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '5개 정보를 찾았어요',
+                '$count개 정보를 찾았어요',
                 style: TextStyle(
                   color: const Color(0xFF152523),
                   fontSize: context.rs(13),
@@ -465,7 +535,7 @@ class _SummaryNotice extends StatelessWidget {
           const ResponsiveGap(width: 7),
           Expanded(
             child: Text(
-              'AI가 자동 확정하지 않아요. 수정하거나 제외한 뒤 직접 추가해 주세요.',
+              '내용을 확인한 뒤 직접 추가해 주세요. 예약은 시작일에 표시되며 종료일은 메모에 저장됩니다.',
               style: TextStyle(
                 color: const Color(0xFF0B5F55),
                 fontSize: context.rs(9),
@@ -481,14 +551,22 @@ class _SummaryNotice extends StatelessWidget {
 }
 
 class _SummaryPrimaryButton extends StatelessWidget {
-  const _SummaryPrimaryButton({required this.onTap});
+  const _SummaryPrimaryButton({
+    required this.onTap,
+    required this.isSaving,
+    required this.isRetry,
+  });
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isSaving;
+  final bool isRetry;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF148776),
+      color: onTap == null && !isSaving
+          ? const Color(0xFF8A9895)
+          : const Color(0xFF148776),
       borderRadius: BorderRadius.circular(context.rs(10)),
       child: InkWell(
         onTap: onTap,
@@ -505,7 +583,7 @@ class _SummaryPrimaryButton extends StatelessWidget {
               ),
               const ResponsiveGap(width: 7),
               Text(
-                '공유 일정에 추가',
+                isSaving ? '저장 중...' : (isRetry ? '남은 일정 다시 추가' : '공유 일정에 추가'),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: context.rs(12),

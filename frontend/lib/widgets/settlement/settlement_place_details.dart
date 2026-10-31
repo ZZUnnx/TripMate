@@ -1,27 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../models/settlement.dart';
+
 import '../common/responsive.dart';
-import 'presentation/settlement_sample_data.dart';
+import 'presentation/settlement_view_data.dart';
 import 'settlement_card_components.dart';
 
 class SettlementPlaceDetails extends StatelessWidget {
-  const SettlementPlaceDetails({super.key});
+  const SettlementPlaceDetails({super.key, required this.data});
+
+  final SettlementData data;
 
   @override
   Widget build(BuildContext context) {
+    final rows = settlementPlaceDetailRows(data);
     return SettlementCard(
       child: Column(
         children: [
-          const SettlementCardHeader(title: '장소별 결제 내역', action: '23건'),
+          SettlementCardHeader(
+            title: '장소별 결제 내역',
+            action: '${data.expenseCount}건',
+          ),
           const ResponsiveGap(height: 10),
-          ...List.generate(samplePlaceDetails.length, (index) {
+          ...List.generate(rows.length, (index) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: context.rs(
-                  index == samplePlaceDetails.length - 1 ? 0 : 10,
-                ),
+                bottom: context.rs(index == rows.length - 1 ? 0 : 10),
               ),
-              child: _PlaceDetailItem(data: samplePlaceDetails[index]),
+              child: _PlaceDetailItem(data: rows[index]),
             );
           }),
         ],

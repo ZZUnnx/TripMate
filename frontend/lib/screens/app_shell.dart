@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'calendar/calendar_screen.dart';
 import 'chat/chat_screen.dart';
 import 'home/home_screen.dart';
-import 'settlement/settlement_screen.dart';
+import 'settlement/settlement_list_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -32,8 +32,16 @@ class _AppShellState extends State<AppShell> {
       children: [
         HomeScreen(currentIndex: 0, onNavigationSelected: _selectTab),
         ChatScreen(currentIndex: 1, onNavigationSelected: _selectTab),
-        CalendarScreen(currentIndex: 2, onNavigationSelected: _selectTab),
-        SettlementScreen(currentIndex: 3, onNavigationSelected: _selectTab),
+        CalendarScreen(
+          currentIndex: 2,
+          onNavigationSelected: _selectTab,
+          isActive: _currentIndex == 2,
+        ),
+        SettlementListScreen(
+          currentIndex: 3,
+          onNavigationSelected: _selectTab,
+          isActive: _currentIndex == 3,
+        ),
       ],
     );
   }

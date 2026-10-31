@@ -1,31 +1,35 @@
 import 'package:flutter/material.dart';
 
+import '../../models/settlement.dart';
+
 import '../common/responsive.dart';
 
 class MySettlementCards extends StatelessWidget {
-  const MySettlementCards({super.key});
+  const MySettlementCards({super.key, required this.data});
+
+  final SettlementData data;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: const [
+      children: [
         Expanded(
           child: _AmountCard(
             label: '내가 보낼 금액',
-            amount: '₩92,450',
-            target: '민지에게',
-            accent: Color(0xFFF27864),
-            background: Color(0xFFFFF0EC),
+            amount: settlementWon(data.completed ? 0 : data.myPayable),
+            target: data.completed ? '정산 완료' : '송금할 금액',
+            accent: const Color(0xFFF27864),
+            background: const Color(0xFFFFF0EC),
           ),
         ),
-        ResponsiveGap(width: 8),
+        const ResponsiveGap(width: 8),
         Expanded(
           child: _AmountCard(
             label: '내가 받을 금액',
-            amount: '₩36,900',
-            target: '서준에게',
-            accent: Color(0xFF2F9D69),
-            background: Color(0xFFE5F6EE),
+            amount: settlementWon(data.completed ? 0 : data.myReceivable),
+            target: data.completed ? '정산 완료' : '받아야 할 금액',
+            accent: const Color(0xFF2F9D69),
+            background: const Color(0xFFE5F6EE),
           ),
         ),
       ],

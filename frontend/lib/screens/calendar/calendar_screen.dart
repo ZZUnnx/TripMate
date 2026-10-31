@@ -10,6 +10,7 @@ import '../../models/trip_schedule.dart';
 import '../../providers/auth_provider.dart';
 import 'trip_calendar_detail_screen.dart';
 import '../../widgets/calendar/add_schedule_sheet.dart';
+import '../../widgets/calendar/confirm_schedule_deletion.dart';
 import '../../widgets/calendar/calendar_legend.dart';
 import '../../widgets/calendar/calendar_month_control.dart';
 import '../../widgets/calendar/calendar_month_grid.dart';
@@ -23,11 +24,13 @@ class CalendarScreen extends StatefulWidget {
   const CalendarScreen({
     this.currentIndex = 2,
     this.onNavigationSelected,
+    this.isActive = true,
     super.key,
   });
 
   final int currentIndex;
   final ValueChanged<int>? onNavigationSelected;
+  final bool isActive;
 
   @override
   State<CalendarScreen> createState() => _CalendarScreenState();
@@ -59,6 +62,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant CalendarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _controller.reload();
+  }
+
+  @override
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
@@ -77,15 +86,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  void _openTripDetail(
+  Future<void> _openTripDetail(
     CalendarAgendaItem agenda,
     List<TripSchedule> schedules,
-  ) {
+  ) async {
     final tripSchedules = schedules
         .where((schedule) => schedule.tripId == agenda.schedule.tripId)
         .toList(growable: false);
 
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => TripCalendarDetailScreen(
           currentIndex: widget.currentIndex,
@@ -95,6 +104,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
       ),
     );
+    if (mounted) _controller.reload();
+  }
+
+  Future<void> _deleteAgenda(CalendarAgendaItem agenda) async {
+    if (_controller.deletingIds.contains(agenda.schedule.id)) return;
+    final confirmed = await confirmScheduleDeletion(context, agenda.title);
+    if (!confirmed || !mounted) return;
+    try {
+      final deleted = await _controller.deleteSchedule(agenda.schedule.id);
+      if (!mounted || !deleted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('일정을 삭제했어요.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('일정을 삭제하지 못했습니다. $error')));
+    }
   }
 
   Future<void> _openAddScheduleSheet(CalendarData data) async {
@@ -223,6 +249,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   SelectedDayAgenda(
                                     selectedDay: _selectedDay,
                                     agendaItems: data.agendaItems,
+                                    onDeleteAgenda: _deleteAgenda,
+                                    deletingIds: _controller.deletingIds,
                                     onAgendaTap: (agenda) =>
                                         _openTripDetail(agenda, data.schedules),
                                   ),

@@ -1,24 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../../models/settlement.dart';
+
 import '../common/responsive.dart';
-import 'presentation/settlement_sample_data.dart';
+import 'presentation/settlement_view_data.dart';
 import 'settlement_card_components.dart';
 
 class SettlementPlacesCard extends StatelessWidget {
-  const SettlementPlacesCard({super.key, required this.compact});
+  const SettlementPlacesCard({
+    super.key,
+    required this.compact,
+    required this.data,
+  });
 
+  final SettlementData data;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final rows = compact ? sampleOverviewPlaceSpends : samplePlaceSpends;
+    final allRows = settlementPlaceRows(data);
+    final rows = compact ? allRows.take(3).toList() : allRows;
 
     return SettlementCard(
       child: Column(
         children: [
           SettlementCardHeader(
             title: '장소별 지출',
-            action: compact ? '상세 보기' : '5개 장소',
+            action: '${data.places.length}개 장소',
           ),
           const ResponsiveGap(height: 10),
           ...List.generate(rows.length, (index) {

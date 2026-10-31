@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../models/settlement.dart';
+
 import '../common/responsive.dart';
 import 'settlement_card_components.dart';
 
 class SettlementTotalSummary extends StatelessWidget {
-  const SettlementTotalSummary({super.key});
+  const SettlementTotalSummary({super.key, required this.data});
+
+  final SettlementData data;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +41,7 @@ class SettlementTotalSummary extends StatelessWidget {
                   ),
                   const ResponsiveGap(width: 6),
                   Text(
-                    '총지출 · 23건',
+                    '총지출 · ${data.expenseCount}건',
                     style: TextStyle(
                       color: const Color(0xFFBEECE3),
                       fontSize: context.rs(11),
@@ -46,8 +50,8 @@ class SettlementTotalSummary extends StatelessWidget {
                   ),
                 ],
               ),
-              const SettlementPill(
-                label: '검토 완료',
+              SettlementPill(
+                label: data.status,
                 foreground: Color(0xFF2F9D69),
                 background: Color(0xFFE5F6EE),
               ),
@@ -55,7 +59,7 @@ class SettlementTotalSummary extends StatelessWidget {
           ),
           const ResponsiveGap(height: 10),
           Text(
-            '₩1,284,600',
+            settlementWon(data.totalAmount),
             style: TextStyle(
               color: Colors.white,
               fontSize: context.rs(26),
@@ -65,13 +69,27 @@ class SettlementTotalSummary extends StatelessWidget {
           ),
           const ResponsiveGap(height: 12),
           Row(
-            children: const [
+            children: [
               Expanded(
-                child: _SummaryFact(label: '1인 평균', value: '₩321,150'),
+                child: _SummaryFact(
+                  label: '1인 평균',
+                  value: settlementWon(
+                    data.totalAmount ~/
+                        (data.expenses
+                            .expand((e) => e.participantIds)
+                            .toSet()
+                            .length
+                            .clamp(1, 1000000)),
+                  ),
+                ),
               ),
-              ResponsiveGap(width: 8),
+              const ResponsiveGap(width: 8),
               Expanded(
-                child: _SummaryFact(label: '정산 대상', value: '4명 · 18건'),
+                child: _SummaryFact(
+                  label: '정산 대상',
+                  value:
+                      '${data.expenses.expand((e) => e.participantIds).toSet().length}명 · ${data.expenseCount}건',
+                ),
               ),
             ],
           ),
