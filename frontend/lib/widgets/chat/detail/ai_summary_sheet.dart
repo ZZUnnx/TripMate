@@ -19,6 +19,7 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
   void initState() {
     super.initState();
     controller.addListener(_onChanged);
+    controller.initialize();
   }
 
   void _onChanged() {
@@ -175,9 +176,58 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                             ],
                             const ResponsiveGap(height: 8),
                             const _SummaryNotice(),
+                            if (controller.isLoading)
+                              const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(),
+                              ),
+                            if (controller.loadError != null) ...[
+                              const Text('기존 일정을 확인하지 못했어요. 다시 조회해 주세요.'),
+                              TextButton(
+                                onPressed: controller.initialize,
+                                child: const Text('다시 조회'),
+                              ),
+                            ],
+                            if (controller.isReady) ...[
+                              for (var i = 0; i < items.length; i++)
+                                if (controller.isEligible(i))
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: CheckboxListTile(
+                                      key: ValueKey('schedule-choice-$i'),
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(items[i]['title'].toString()),
+                                      subtitle: Text(
+                                        [
+                                          items[i]['date'],
+                                          items[i]['time'],
+                                          items[i]['placeName'],
+                                          if (controller.isExisting(i))
+                                            '추가됨'
+                                          else if (controller.isSuspected(i))
+                                            '중복 의심 · 확인 후 선택'
+                                          else
+                                            '새 일정',
+                                        ].whereType<String>().join(' · '),
+                                      ),
+                                      value: controller.isSelected(i),
+                                      onChanged:
+                                          controller.isSaving ||
+                                              controller.isExisting(i)
+                                          ? null
+                                          : (value) => controller.select(
+                                              i,
+                                              value ?? false,
+                                            ),
+                                    ),
+                                  ),
+                              Text(
+                                '선택 ${controller.pendingCount}개 · 기존 일정 ${controller.existingCount}개 제외',
+                              ),
+                            ],
                             const ResponsiveGap(height: 8),
                             Text(
-                              '일정·예약 ${controller.eligibleCount}개를 추가할 수 있어요. '
+                              '검토 대상 일정·예약 ${controller.eligibleCount}개. '
                               '정산 정보는 캘린더에 추가하지 않습니다.',
                               style: TextStyle(fontSize: context.rs(11)),
                             ),
@@ -203,6 +253,7 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                               isRetry: controller.savedCount > 0,
                               onTap:
                                   controller.isSaving ||
+                                      !controller.isReady ||
                                       controller.pendingCount == 0
                                   ? null
                                   : _saveSchedules,

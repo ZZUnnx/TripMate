@@ -29,3 +29,9 @@ Spring Boot 서버 프로젝트가 들어갈 폴더입니다.
 배포 시 새 백엔드 빌드가 필요합니다. 현재 `ddl-auto=update` 설정은 새 테이블을 생성하며, 자동 변경을 끈 환경에서는 [settlement.sql](../database/settlement.sql)을 적용하세요. 실행 중인 운영 서버나 DB에는 자동 배포·변경하지 않았습니다.
 
 검증: `./gradlew test --tests 'com.tripmate.backend.settlement.*'` (DB 접속 없이 계산·서비스 단위 테스트).
+
+AI 요약 일정 추가: `POST /api/trips/{tripId}/schedules/import` (인증 및 기존 일정 생성과 같은 요청 본문).
+같은 여행의 날짜·시간·제목·장소가 일치하면 기존 일정을 반환합니다. 제목·장소의 공백은 비교에서 제외합니다.
+응답은 `{created, schedule}`이며 새로 저장하면 201 / `created: true`, 이미 존재하면 200 / `false`입니다.
+여행 행 잠금과 READ_COMMITTED 트랜잭션으로 동시 추가를 직렬화합니다. 기존 일정 생성 API도 같은 잠금을 사용합니다.
+DB 스키마 변경은 없으며, 새 프론트를 사용하기 전에 백엔드를 배포해야 합니다. 기존 중복 데이터는 자동 삭제하지 않습니다.

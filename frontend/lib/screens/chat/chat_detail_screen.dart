@@ -172,7 +172,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         );
         if (!mounted || savedCount == null) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('공유 일정 $savedCount개를 추가했어요. 캘린더에서 확인해 주세요.')),
+          SnackBar(
+            content: Text(
+              '새 일정 $savedCount개 추가 · 기존 일정 ${summaryController.existingCount}개 제외',
+            ),
+          ),
         );
       } finally {
         summaryController.dispose();
@@ -298,13 +302,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             onSharedSchedule: _openSharedSchedule,
                             onSettlement: () {
                               _closeRoomMenu();
-                              Navigator.of(context).push(MaterialPageRoute<void>(
-                                builder: (_) => SettlementScreen(
-                                  tripId: widget.room.tripId,
-                                  tripTitle: widget.room.title,
-                                  currentIndex: 1,
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => SettlementScreen(
+                                    tripId: widget.room.tripId,
+                                    tripTitle: widget.room.title,
+                                    currentIndex: 1,
+                                  ),
                                 ),
-                              ));
+                              );
                             },
                             onFiles: () {
                               _closeRoomMenu();

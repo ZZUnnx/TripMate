@@ -3,9 +3,70 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/controllers/chat/ai_summary_controller.dart';
+import 'package:frontend/models/trip_schedule.dart';
 import 'package:frontend/widgets/chat/detail/ai_summary_sheet.dart';
 
 void main() {
+  testWidgets(
+    'existing choice is locked and suspected choice needs selection',
+    (tester) async {
+      final controller = AiSummaryController(
+        tripId: 1,
+        accessToken: 'test',
+        items: [
+          {
+            'type': 'SCHEDULE',
+            'title': 'lunch',
+            'date': '2026-10-31',
+            'time': '12:00',
+            'placeName': 'cafe',
+          },
+          {
+            'type': 'SCHEDULE',
+            'title': 'meal',
+            'date': '2026-10-31',
+            'time': '12:00',
+            'placeName': 'cafe',
+          },
+        ],
+        scheduleLoader: () async => [
+          TripSchedule(
+            id: 1,
+            tripId: 1,
+            tripTitle: 'trip',
+            title: 'lunch',
+            scheduledDate: DateTime(2026, 10, 31),
+            scheduledTime: '12:00:00',
+            placeName: 'cafe',
+            category: 'shared',
+            sortOrder: 0,
+          ),
+        ],
+        scheduleCreator: (_) async {},
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: AiSummarySheet(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final existing = tester.widget<CheckboxListTile>(
+        find.byKey(const ValueKey('schedule-choice-0')),
+      );
+      expect(existing.onChanged, isNull);
+      expect(existing.value, isFalse);
+      final suspected = find.byKey(const ValueKey('schedule-choice-1'));
+      expect(tester.widget<CheckboxListTile>(suspected).value, isFalse);
+      await tester.ensureVisible(suspected);
+      await tester.tap(suspected);
+      await tester.pump();
+      expect(tester.widget<CheckboxListTile>(suspected).value, isTrue);
+      expect(controller.pendingCount, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('adds the current summary and returns the saved count', (
     tester,
   ) async {
@@ -14,6 +75,7 @@ void main() {
     int? result;
     final controller = AiSummaryController(
       tripId: 42,
+      scheduleLoader: () async => [],
       accessToken: 'test',
       items: [
         {'type': 'SCHEDULE', 'title': 'tour', 'date': '2026-10-31'},
@@ -67,6 +129,7 @@ void main() {
     var calls = 0;
     final controller = AiSummaryController(
       tripId: 1,
+      scheduleLoader: () async => [],
       accessToken: 'test',
       items: [
         {'type': 'SCHEDULE', 'title': 'unknown date', 'date': null},
