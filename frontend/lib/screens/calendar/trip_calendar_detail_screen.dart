@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../widgets/calendar/presentation/calendar_formatters.dart';
-import '../../widgets/calendar/presentation/calendar_transformations.dart';
+import '../../controllers/calendar/trip_calendar_detail_controller.dart';
 
 import '../../models/trip_schedule.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/chat_service.dart';
 import '../../widgets/calendar/detail/calendar_view_action.dart';
 import '../../widgets/calendar/detail/trip_calendar_header.dart';
 import '../../widgets/calendar/detail/trip_cost_summary_card.dart';
@@ -17,7 +15,7 @@ import '../../widgets/calendar/detail/trip_timeline.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/common/bottom_navigation.dart';
 
-class TripCalendarDetailScreen extends StatelessWidget {
+class TripCalendarDetailScreen extends StatefulWidget {
   const TripCalendarDetailScreen({
     required this.currentIndex,
     required this.onNavigationSelected,
@@ -31,14 +29,51 @@ class TripCalendarDetailScreen extends StatelessWidget {
   final List<TripSchedule> schedules;
   final TripSchedule selectedSchedule;
 
+  @override
+  State<TripCalendarDetailScreen> createState() =>
+      _TripCalendarDetailScreenState();
+}
+
+class _TripCalendarDetailScreenState extends State<TripCalendarDetailScreen> {
+  late TripCalendarDetailController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _createController();
+  }
+
+  void _createController() {
+    _controller = TripCalendarDetailController(
+      schedules: widget.schedules,
+      selectedSchedule: widget.selectedSchedule,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller.updateSession(context.watch<AuthProvider>().accessToken);
+  }
+
+  @override
+  void didUpdateWidget(covariant TripCalendarDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.schedules != widget.schedules ||
+        oldWidget.selectedSchedule != widget.selectedSchedule) {
+      _createController();
+      _controller.updateSession(context.read<AuthProvider>().accessToken);
+    }
+  }
+
   void _handleNavigation(BuildContext context, int index) {
-    if (index == currentIndex) {
+    if (index == widget.currentIndex) {
       Navigator.of(context).maybePop();
       return;
     }
 
     Navigator.of(context).pop();
-    onNavigationSelected?.call(index);
+    widget.onNavigationSelected?.call(index);
   }
 
   void _showPreparingMessage(BuildContext context, String label) {
@@ -48,16 +83,10 @@ class TripCalendarDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timelineSections = calendarTimelineSectionsFromSchedules(schedules);
-    final timeRange = calendarTimeRangeFor(schedules);
-    final dateRange = calendarTripDateRange(selectedSchedule);
-    final accessToken = context.watch<AuthProvider>().accessToken;
-    final membersFuture = accessToken == null
-        ? null
-        : ChatService.fetchMembers(
-            accessToken: accessToken,
-            tripId: selectedSchedule.tripId,
-          );
+    final timelineSections = _controller.timelineSections;
+    final timeRange = _controller.timeRange;
+    final dateRange = _controller.dateRange;
+    final membersFuture = _controller.membersFuture;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -82,7 +111,7 @@ class TripCalendarDetailScreen extends StatelessWidget {
                           padding: context.insetsFromLTRB(18, 5, 18, 88),
                           children: [
                             TripCalendarHeader(
-                              title: selectedSchedule.tripTitle,
+                              title: widget.selectedSchedule.tripTitle,
                               subtitle: '$dateRange · 여행 전체 타임라인',
                               onBack: () => Navigator.of(context).pop(),
                               onAdd: () =>
@@ -91,9 +120,10 @@ class TripCalendarDetailScreen extends StatelessWidget {
                             const ResponsiveGap(height: 8),
                             TripOverviewCard(
                               dateRange: dateRange,
-                              scheduleCount: schedules.length,
+                              scheduleCount: widget.schedules.length,
                               destination:
-                                  selectedSchedule.tripDestination ?? '여행 일정',
+                                  widget.selectedSchedule.tripDestination ??
+                                  '여행 일정',
                               membersFuture: membersFuture,
                             ),
                             const ResponsiveGap(height: 8),
@@ -120,7 +150,7 @@ class TripCalendarDetailScreen extends StatelessWidget {
                           right: 0,
                           bottom: 0,
                           child: BottomNavigation(
-                            currentIndex: currentIndex,
+                            currentIndex: widget.currentIndex,
                             onItemSelected: (index) =>
                                 _handleNavigation(context, index),
                           ),

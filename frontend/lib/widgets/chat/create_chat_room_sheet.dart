@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../services/chat_service.dart';
+import '../../controllers/chat/create_chat_room_controller.dart';
 import '../common/responsive.dart';
 
 class CreateChatRoomSheet extends StatefulWidget {
@@ -15,10 +15,23 @@ class CreateChatRoomSheet extends StatefulWidget {
 class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
   final _titleController = TextEditingController();
 
-  bool _isSaving = false;
+  late final CreateChatRoomController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CreateChatRoomController(accessToken: widget.accessToken);
+    _controller.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
     _titleController.dispose();
     super.dispose();
   }
@@ -31,17 +44,10 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-    });
-
     try {
-      await ChatService.createChatRoom(
-        accessToken: widget.accessToken,
-        title: title,
-      );
+      final created = await _controller.createRoom(title);
 
-      if (!mounted) {
+      if (!mounted || !created) {
         return;
       }
 
@@ -50,10 +56,6 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
       if (!mounted) {
         return;
       }
-
-      setState(() {
-        _isSaving = false;
-      });
 
       _showMessage(e.toString());
     }
@@ -90,7 +92,9 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
                     ),
                   ),
                   IconButton(
-                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    onPressed: _controller.isSaving
+                        ? null
+                        : () => Navigator.pop(context),
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ],
@@ -107,12 +111,12 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
                 width: double.infinity,
                 height: context.rs(54),
                 child: FilledButton(
-                  onPressed: _isSaving ? null : _createRoom,
+                  onPressed: _controller.isSaving ? null : _createRoom,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF148776),
                     foregroundColor: Colors.white,
                   ),
-                  child: _isSaving
+                  child: _controller.isSaving
                       ? const SizedBox(
                           width: 20,
                           height: 20,
