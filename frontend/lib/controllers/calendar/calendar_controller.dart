@@ -14,6 +14,7 @@ class CalendarController extends ChangeNotifier {
     scheduleLoader,
     Future<void> Function(String token, CalendarScheduleDraft draft)?
     scheduleCreator,
+    Future<void> Function(String token, int scheduleId)? scheduleDeleter,
   }) : _tripLoader =
            tripLoader ??
            ((token) => ScheduleService.fetchTrips(accessToken: token)),
@@ -23,13 +24,22 @@ class CalendarController extends ChangeNotifier {
              accessToken: token,
              tripId: tripId,
            )),
-       _scheduleCreator = scheduleCreator ?? _createSchedule;
+       _scheduleCreator = scheduleCreator ?? _createSchedule,
+       _scheduleDeleter =
+           scheduleDeleter ??
+           ((token, id) => ScheduleService.deleteSchedule(
+             accessToken: token,
+             scheduleId: id,
+           ));
 
   final Future<List<Trip>> Function(String token) _tripLoader;
   final Future<List<TripSchedule>> Function(String token, int tripId)
   _scheduleLoader;
   final Future<void> Function(String token, CalendarScheduleDraft draft)
   _scheduleCreator;
+  final Future<void> Function(String token, int scheduleId) _scheduleDeleter;
+  final _deletingIds = <int>{};
+  Set<int> get deletingIds => Set.unmodifiable(_deletingIds);
   Future<CalendarData>? _calendarFuture;
   String? _accessToken;
   bool _disposed = false;
@@ -71,6 +81,22 @@ class CalendarController extends ChangeNotifier {
     if (_disposed) return;
     await _scheduleCreator(accessToken, draft);
     if (!_disposed && _accessToken == accessToken) reload();
+  }
+
+  Future<bool> deleteSchedule(int scheduleId) async {
+    final token = _accessToken;
+    if (_disposed || _deletingIds.contains(scheduleId)) return false;
+    if (token == null) throw StateError('로그인이 필요합니다.');
+    _deletingIds.add(scheduleId);
+    notifyListeners();
+    try {
+      await _scheduleDeleter(token, scheduleId);
+      if (!_disposed && _accessToken == token) reload();
+      return true;
+    } finally {
+      _deletingIds.remove(scheduleId);
+      if (!_disposed) notifyListeners();
+    }
   }
 
   static Future<void> _createSchedule(

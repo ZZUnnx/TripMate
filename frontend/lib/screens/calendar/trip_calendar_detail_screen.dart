@@ -12,6 +12,7 @@ import '../../widgets/calendar/detail/trip_cost_summary_card.dart';
 import '../../widgets/calendar/detail/trip_map_notice.dart';
 import '../../widgets/calendar/detail/trip_overview_card.dart';
 import '../../widgets/calendar/detail/trip_timeline.dart';
+import '../../widgets/calendar/confirm_schedule_deletion.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/common/bottom_navigation.dart';
 
@@ -48,6 +49,34 @@ class _TripCalendarDetailScreenState extends State<TripCalendarDetailScreen> {
       schedules: widget.schedules,
       selectedSchedule: widget.selectedSchedule,
     );
+    _controller.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _deleteSchedule(TripSchedule schedule) async {
+    if (_controller.deletingIds.contains(schedule.id)) return;
+    final confirmed = await confirmScheduleDeletion(context, schedule.title);
+    if (!confirmed || !mounted) return;
+    try {
+      final deleted = await _controller.deleteSchedule(schedule.id);
+      if (!mounted || !deleted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('일정을 삭제했어요.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('일정을 삭제하지 못했습니다. $error')));
+    }
   }
 
   @override
@@ -61,6 +90,8 @@ class _TripCalendarDetailScreenState extends State<TripCalendarDetailScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.schedules != widget.schedules ||
         oldWidget.selectedSchedule != widget.selectedSchedule) {
+      _controller.removeListener(_onControllerChanged);
+      _controller.dispose();
       _createController();
       _controller.updateSession(context.read<AuthProvider>().accessToken);
     }
@@ -120,7 +151,7 @@ class _TripCalendarDetailScreenState extends State<TripCalendarDetailScreen> {
                             const ResponsiveGap(height: 8),
                             TripOverviewCard(
                               dateRange: dateRange,
-                              scheduleCount: widget.schedules.length,
+                              scheduleCount: _controller.scheduleCount,
                               destination:
                                   widget.selectedSchedule.tripDestination ??
                                   '여행 일정',
@@ -138,7 +169,11 @@ class _TripCalendarDetailScreenState extends State<TripCalendarDetailScreen> {
                             const ResponsiveGap(height: 8),
                             TripTimelineHeading(timeRange: timeRange),
                             const ResponsiveGap(height: 8),
-                            TripTimeline(sections: timelineSections),
+                            TripTimeline(
+                              sections: timelineSections,
+                              onDelete: _deleteSchedule,
+                              deletingIds: _controller.deletingIds,
+                            ),
                             const ResponsiveGap(height: 8),
                             TripMapNotice(
                               onTap: () => _showPreparingMessage(context, '지도'),

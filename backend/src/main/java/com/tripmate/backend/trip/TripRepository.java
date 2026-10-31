@@ -9,6 +9,10 @@ import java.util.Optional;
 
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Trip t where t.id = :tripId")
+    Optional<Trip> findByIdForUpdate(@Param("tripId") Long tripId);
+
     @Query("""
             select distinct t
             from Trip t

@@ -9,6 +9,7 @@ import '../calendar_empty_agenda_card.dart';
 import '../../../models/trip_schedule.dart';
 import '../calendar_status_pill.dart';
 import '../../common/responsive.dart';
+import '../../common/swipe_delete_action.dart';
 
 class TripTimelineHeading extends StatelessWidget {
   const TripTimelineHeading({super.key, required this.timeRange});
@@ -42,9 +43,16 @@ class TripTimelineHeading extends StatelessWidget {
 }
 
 class TripTimeline extends StatelessWidget {
-  const TripTimeline({super.key, required this.sections});
+  const TripTimeline({
+    super.key,
+    required this.sections,
+    this.onDelete,
+    this.deletingIds = const {},
+  });
 
   final List<CalendarTimelineDateSection> sections;
+  final ValueChanged<TripSchedule>? onDelete;
+  final Set<int> deletingIds;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +65,11 @@ class TripTimeline extends StatelessWidget {
           .map(
             (section) => Padding(
               padding: EdgeInsets.only(bottom: context.rs(12)),
-              child: _TimelineSection(section: section),
+              child: _TimelineSection(
+                section: section,
+                onDelete: onDelete,
+                deletingIds: deletingIds,
+              ),
             ),
           )
           .toList(),
@@ -66,9 +78,15 @@ class TripTimeline extends StatelessWidget {
 }
 
 class _TimelineSection extends StatelessWidget {
-  const _TimelineSection({required this.section});
+  const _TimelineSection({
+    required this.section,
+    required this.onDelete,
+    required this.deletingIds,
+  });
 
   final CalendarTimelineDateSection section;
+  final ValueChanged<TripSchedule>? onDelete;
+  final Set<int> deletingIds;
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +116,11 @@ class _TimelineSection extends StatelessWidget {
         const ResponsiveGap(height: 8),
         ...List.generate(section.items.length, (index) {
           return _TimelineRow(
+            key: ValueKey(section.items[index].schedule.id),
             item: section.items[index],
             isLast: index == section.items.length - 1,
+            onDelete: onDelete,
+            isDeleting: deletingIds.contains(section.items[index].schedule.id),
           );
         }),
       ],
@@ -108,10 +129,18 @@ class _TimelineSection extends StatelessWidget {
 }
 
 class _TimelineRow extends StatefulWidget {
-  const _TimelineRow({required this.item, required this.isLast});
+  const _TimelineRow({
+    super.key,
+    required this.item,
+    required this.isLast,
+    required this.onDelete,
+    required this.isDeleting,
+  });
 
   final CalendarTripTimelineEntry item;
   final bool isLast;
+  final ValueChanged<TripSchedule>? onDelete;
+  final bool isDeleting;
 
   @override
   State<_TimelineRow> createState() => _TimelineRowState();
@@ -172,136 +201,145 @@ class _TimelineRowState extends State<_TimelineRow>
             ),
             const ResponsiveGap(width: 7),
             Expanded(
-              child: Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(context.rs(12)),
-                child: InkWell(
-                  onTap: () => setState(() => _expanded = !_expanded),
+              child: SwipeDeleteAction(
+                onDelete: widget.onDelete == null
+                    ? null
+                    : () => widget.onDelete!(schedule),
+                isDeleting: widget.isDeleting,
+                child: Material(
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(context.rs(12)),
-                  child: AnimatedSize(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: Container(
-                      width: double.infinity,
-                      padding: context.symmetricInsets(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: const Color(0xFFDCE6E3)),
-                        borderRadius: BorderRadius.circular(context.rs(12)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.title,
-                                      maxLines: _expanded ? 2 : 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: const Color(0xFF152523),
-                                        fontSize: context.rs(12),
-                                        fontWeight: FontWeight.w600,
+                  child: InkWell(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    borderRadius: BorderRadius.circular(context.rs(12)),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        width: double.infinity,
+                        padding: context.symmetricInsets(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: const Color(0xFFDCE6E3)),
+                          borderRadius: BorderRadius.circular(context.rs(12)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.title,
+                                        maxLines: _expanded ? 2 : 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: const Color(0xFF152523),
+                                          fontSize: context.rs(12),
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
+                                      const ResponsiveGap(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on_outlined,
+                                            color: const Color(0xFF60706D),
+                                            size: context.rs(10),
+                                          ),
+                                          const ResponsiveGap(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              item.place,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: const Color(0xFF60706D),
+                                                fontSize: context.rs(10),
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const ResponsiveGap(width: 7),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CalendarStatusPill(
+                                      label: item.status.label,
+                                      foreground: item.status.foreground,
+                                      background: item.status.background,
                                     ),
                                     const ResponsiveGap(height: 4),
                                     Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(
-                                          Icons.location_on_outlined,
-                                          color: const Color(0xFF60706D),
-                                          size: context.rs(10),
-                                        ),
-                                        const ResponsiveGap(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            item.place,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: const Color(0xFF60706D),
-                                              fontSize: context.rs(10),
-                                              fontWeight: FontWeight.w400,
-                                            ),
+                                        Text(
+                                          item.cost,
+                                          style: TextStyle(
+                                            color: const Color(0xFF152523),
+                                            fontSize: context.rs(10),
+                                            fontWeight: FontWeight.w700,
                                           ),
+                                        ),
+                                        const ResponsiveGap(width: 3),
+                                        Icon(
+                                          _expanded
+                                              ? Icons.expand_less_rounded
+                                              : Icons.expand_more_rounded,
+                                          color: const Color(0xFF8A9895),
+                                          size: context.rs(14),
                                         ),
                                       ],
                                     ),
                                   ],
                                 ),
+                              ],
+                            ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              reverseDuration: const Duration(
+                                milliseconds: 200,
                               ),
-                              const ResponsiveGap(width: 7),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CalendarStatusPill(
-                                    label: item.status.label,
-                                    foreground: item.status.foreground,
-                                    background: item.status.background,
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                return SizeTransition(
+                                  sizeFactor: animation,
+                                  alignment: Alignment.topCenter,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
                                   ),
-                                  const ResponsiveGap(height: 4),
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        item.cost,
-                                        style: TextStyle(
-                                          color: const Color(0xFF152523),
-                                          fontSize: context.rs(10),
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const ResponsiveGap(width: 3),
-                                      Icon(
-                                        _expanded
-                                            ? Icons.expand_less_rounded
-                                            : Icons.expand_more_rounded,
-                                        color: const Color(0xFF8A9895),
-                                        size: context.rs(14),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            reverseDuration: const Duration(milliseconds: 200),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) {
-                              return SizeTransition(
-                                sizeFactor: animation,
-                                alignment: Alignment.topCenter,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: _expanded
-                                ? _TimelineDetailContent(
-                                    key: ValueKey(item.schedule.id),
-                                    item: item,
-                                    schedule: schedule,
-                                    memo: memo,
-                                    url: url,
-                                  )
-                                : const SizedBox.shrink(
-                                    key: ValueKey('collapsed'),
-                                  ),
-                          ),
-                        ],
+                                );
+                              },
+                              child: _expanded
+                                  ? _TimelineDetailContent(
+                                      key: ValueKey(item.schedule.id),
+                                      item: item,
+                                      schedule: schedule,
+                                      memo: memo,
+                                      url: url,
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey('collapsed'),
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
