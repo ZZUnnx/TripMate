@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../widgets/calendar/presentation/calendar_data.dart';
-import '../../widgets/calendar/presentation/calendar_transformations.dart';
+import '../../controllers/calendar/calendar_controller.dart';
 import '../../widgets/calendar/presentation/calendar_view_data.dart';
 
 import '../../models/trip_schedule.dart';
 import '../../providers/auth_provider.dart';
 import 'trip_calendar_detail_screen.dart';
-import '../../services/schedule_service.dart';
 import '../../widgets/calendar/add_schedule_sheet.dart';
 import '../../widgets/calendar/calendar_legend.dart';
 import '../../widgets/calendar/calendar_month_control.dart';
@@ -35,39 +34,38 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  Future<CalendarData>? _calendarFuture;
-  String? _loadedAccessToken;
+  final _controller = CalendarController();
   DateTime _focusedMonth = DateTime.now();
   DateTime _selectedDay = DateTime.now();
 
-  Future<CalendarData> _loadCalendar(String accessToken) async {
-    final trips = await ScheduleService.fetchTrips(accessToken: accessToken);
-    final scheduleGroups = await Future.wait(
-      trips.map(
-        (trip) => ScheduleService.fetchTripSchedules(
-          accessToken: accessToken,
-          tripId: trip.id,
-        ),
-      ),
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.watch<AuthProvider>();
+    _controller.updateSession(
+      isInitialized: auth.isInitialized,
+      accessToken: auth.accessToken,
     );
-    final schedules = scheduleGroups.expand((items) => items).toList()
-      ..sort(calendarCompareTripSchedules);
-
-    return CalendarData(trips: trips, schedules: schedules);
   }
 
-  void _refreshCalendar() {
-    final accessToken = context.read<AuthProvider>().accessToken;
-
-    if (accessToken == null) {
-      return;
-    }
-
-    setState(() {
-      _calendarFuture = _loadCalendar(accessToken);
-      _loadedAccessToken = accessToken;
-    });
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _refreshCalendar() => _controller.reload();
 
   void _changeMonth(int offset) {
     setState(() {
@@ -128,17 +126,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     try {
-      await ScheduleService.createScheduleFromInput(
-        accessToken: accessToken,
-        tripId: draft.tripId,
-        title: draft.title,
-        scheduledDate: draft.scheduledDate,
-        category: draft.category,
-        scheduledTime: draft.scheduledTime,
-        placeName: draft.placeName,
-        url: draft.url,
-        description: draft.description,
-      );
+      await _controller.addSchedule(draft, accessToken: accessToken);
 
       if (!mounted) {
         return;
@@ -150,8 +138,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
           draft.scheduledDate.year,
           draft.scheduledDate.month,
         );
-        _calendarFuture = _loadCalendar(accessToken);
-        _loadedAccessToken = accessToken;
       });
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('일정을 추가했어요.')));
@@ -168,13 +154,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-
-    if (auth.isInitialized &&
-        auth.accessToken != null &&
-        (_calendarFuture == null || _loadedAccessToken != auth.accessToken)) {
-      _loadedAccessToken = auth.accessToken;
-      _calendarFuture = _loadCalendar(auth.accessToken!);
-    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -196,7 +175,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: Stack(
                       children: [
                         FutureBuilder<CalendarData>(
-                          future: _calendarFuture,
+                          future: _controller.calendarFuture,
                           builder: (context, snapshot) {
                             final data = snapshot.data ?? CalendarData.empty();
 

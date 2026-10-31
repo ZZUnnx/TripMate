@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/chat_room.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/chat_service.dart';
+import '../../controllers/chat/chat_list_controller.dart';
 import 'chat_detail_screen.dart';
 import '../../widgets/common/responsive.dart';
 import '../../widgets/common/bottom_navigation.dart';
@@ -173,12 +173,14 @@ class _ChatRoomList extends StatefulWidget {
 }
 
 class _ChatRoomListState extends State<_ChatRoomList> {
-  late Future<List<ChatRoom>> _chatRoomsFuture;
+  late final ChatListController _controller;
 
   @override
   void initState() {
     super.initState();
-    _chatRoomsFuture = _fetchChatRooms();
+    _controller = ChatListController(accessToken: widget.accessToken);
+    _controller.addListener(_onControllerChanged);
+    _controller.initialize();
   }
 
   @override
@@ -187,24 +189,27 @@ class _ChatRoomListState extends State<_ChatRoomList> {
 
     if (oldWidget.accessToken != widget.accessToken ||
         oldWidget.refreshVersion != widget.refreshVersion) {
-      _chatRoomsFuture = _fetchChatRooms();
+      _controller.reload(accessToken: widget.accessToken);
     }
   }
 
-  Future<List<ChatRoom>> _fetchChatRooms() {
-    return ChatService.fetchChatRooms(accessToken: widget.accessToken);
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
-  void _retry() {
-    setState(() {
-      _chatRoomsFuture = _fetchChatRooms();
-    });
+  void _retry() => _controller.reload();
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ChatRoom>>(
-      future: _chatRoomsFuture,
+      future: _controller.roomsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const ChatListLoadingState();
