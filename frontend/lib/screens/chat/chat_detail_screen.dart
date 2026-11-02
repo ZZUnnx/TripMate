@@ -174,7 +174,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '새 일정 $savedCount개 추가 · 기존 일정 ${summaryController.existingCount}개 제외',
+              '일정 $savedCount개 추가·업데이트 · 기존 일정 ${summaryController.existingCount}개 제외',
             ),
           ),
         );

@@ -79,6 +79,16 @@ public class ScheduleController {
         return ResponseEntity.ok(scheduleService.updateSchedule(scheduleId, userId, request));
     }
 
+    @PatchMapping("/schedules/{scheduleId}/ai-update")
+    public ResponseEntity<ScheduleResponse> applyAiUpdate(
+            @PathVariable Long scheduleId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            @Valid @RequestBody ScheduleRequest request
+    ) {
+        return ResponseEntity.ok(scheduleService.applyAiUpdate(
+                scheduleId, authUserIdResolver.resolve(authorizationHeader), request));
+    }
+
     @DeleteMapping("/schedules/{scheduleId}")
     public ResponseEntity<Void> deleteSchedule(
             @PathVariable Long scheduleId,

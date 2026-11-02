@@ -103,9 +103,26 @@ CalendarTripTimelineEntry calendarTimelineEntryFromSchedule(
             foreground: const Color(0xFF0B5F55),
             background: const Color(0xFFDDF3EE),
           ),
-    cost: '비용 미정',
+    cost: calendarReservationCost(schedule),
     dotColor: dotColor,
   );
+}
+
+String calendarReservationCost(TripSchedule schedule) {
+  if (schedule.category != '예약') return '비용 미정';
+  final memo = schedule.description ?? '';
+  final amountMatch = RegExp(
+    r'^예약 비용: (\d+)원\r?$',
+    multiLine: true,
+  ).firstMatch(memo);
+  final amount = int.tryParse(amountMatch?.group(1) ?? '');
+  if (amount == null) return '비용 미정';
+  final peopleMatch = RegExp(
+    r'^예약 인원: ([1-9]\d*)명\r?$',
+    multiLine: true,
+  ).firstMatch(memo);
+  final people = peopleMatch?.group(1);
+  return '총 ${calendarFormatWon(amount)}${people == null ? '' : ' · $people명'}';
 }
 
 int calendarCompareTripSchedules(TripSchedule left, TripSchedule right) {

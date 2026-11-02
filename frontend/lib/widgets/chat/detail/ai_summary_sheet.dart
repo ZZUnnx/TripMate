@@ -204,6 +204,8 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                                           items[i]['placeName'],
                                           if (controller.isExisting(i))
                                             '추가됨'
+                                          else if (controller.isUpdate(i))
+                                            '기존 일정 업데이트 · 확인 후 선택\n${controller.updatePreview(i)}'
                                           else if (controller.isSuspected(i))
                                             '중복 의심 · 확인 후 선택'
                                           else
@@ -305,17 +307,32 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
 
           final startDate = _formatDate(item['date']);
           final endDate = _formatDate(item['endDate']);
+          final amount = item['amount'];
+          final peopleCount = item['peopleCount'];
+          final lines = <String>[];
 
           if (startDate != null && endDate != null) {
-            return '$title · $startDate - $endDate';
-          }
-          if (startDate != null) {
-            return '$title · $startDate';
+            lines.add('$title · $startDate - $endDate');
+          } else if (startDate != null) {
+            lines.add('$title · $startDate');
+          } else {
+            lines.add(title);
           }
 
-          return title;
+          final details = <String>[];
+          if (amount != null) {
+            details.add('총 ${_formatAmount(amount)}원');
+          }
+          if (peopleCount != null) {
+            details.add('$peopleCount명');
+          }
+          if (details.isNotEmpty) {
+            lines.add(details.join(' · '));
+          }
+
+          return lines.join('\n');
         })
-        .join('\n');
+        .join('\n\n');
   }
 
   String _buildSettlementContent(List<dynamic> settlements) {
@@ -634,7 +651,9 @@ class _SummaryPrimaryButton extends StatelessWidget {
               ),
               const ResponsiveGap(width: 7),
               Text(
-                isSaving ? '저장 중...' : (isRetry ? '남은 일정 다시 추가' : '공유 일정에 추가'),
+                isSaving
+                    ? '저장 중...'
+                    : (isRetry ? '남은 변경 다시 적용' : '선택한 일정 추가·업데이트'),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: context.rs(12),

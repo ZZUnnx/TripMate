@@ -183,9 +183,12 @@ class ScheduleService {
   static Future<TripSchedule> updateSchedule({
     required String accessToken,
     required TripSchedule schedule,
+    bool aiUpdate = false,
   }) async {
     final response = await http.patch(
-      Uri.parse('${AuthService.baseUrl}/api/schedules/${schedule.id}'),
+      Uri.parse(
+        '${AuthService.baseUrl}/api/schedules/${schedule.id}${aiUpdate ? '/ai-update' : ''}',
+      ),
       headers: {
         'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',

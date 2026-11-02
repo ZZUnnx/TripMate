@@ -8,6 +8,57 @@ import 'package:frontend/widgets/chat/detail/ai_summary_sheet.dart';
 
 void main() {
   testWidgets(
+    'reservation update displays before and after and requires selection',
+    (tester) async {
+      var updates = 0;
+      final controller = AiSummaryController(
+        tripId: 1,
+        accessToken: 'test',
+        items: [
+          {
+            'type': 'RESERVATION',
+            'title': '호텔 예약',
+            'date': '2026-10-31',
+            'amount': 240000,
+          },
+        ],
+        scheduleLoader: () async => [
+          TripSchedule(
+            id: 1,
+            tripId: 1,
+            tripTitle: 'trip',
+            title: '호텔 예약',
+            category: '예약',
+            scheduledDate: DateTime(2026, 10, 31),
+            sortOrder: 0,
+          ),
+        ],
+        scheduleUpdater: (_) async {
+          updates++;
+        },
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: AiSummarySheet(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final choice = find.byKey(const ValueKey('schedule-choice-0'));
+      expect(tester.widget<CheckboxListTile>(choice).value, isFalse);
+      expect(find.textContaining('기존 일정 업데이트'), findsOneWidget);
+      expect(find.textContaining('예약 비용: 240000원'), findsOneWidget);
+      expect(updates, 0);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+      expect(tester.widget<CheckboxListTile>(choice).value, isTrue);
+      expect(updates, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'existing choice is locked and suspected choice needs selection',
     (tester) async {
       final controller = AiSummaryController(
@@ -108,8 +159,8 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('1개 정보를 찾았어요'), findsOneWidget);
-    await tester.ensureVisible(find.text('공유 일정에 추가'));
-    await tester.tap(find.text('공유 일정에 추가'));
+    await tester.ensureVisible(find.text('선택한 일정 추가·업데이트'));
+    await tester.tap(find.text('선택한 일정 추가·업데이트'));
     await tester.pump();
     expect(find.text('저장 중...'), findsOneWidget);
     await tester.tap(find.text('저장 중...'));
@@ -143,8 +194,8 @@ void main() {
         home: Scaffold(body: AiSummarySheet(controller: controller)),
       ),
     );
-    await tester.ensureVisible(find.text('공유 일정에 추가'));
-    await tester.tap(find.text('공유 일정에 추가'));
+    await tester.ensureVisible(find.text('선택한 일정 추가·업데이트'));
+    await tester.tap(find.text('선택한 일정 추가·업데이트'));
     await tester.pump();
     expect(calls, 0);
     expect(find.textContaining('1개는 제외됩니다'), findsOneWidget);

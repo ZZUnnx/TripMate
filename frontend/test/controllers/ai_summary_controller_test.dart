@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/controllers/chat/ai_summary_controller.dart';
 import 'package:frontend/models/trip_schedule.dart';
+import 'package:frontend/widgets/calendar/presentation/calendar_transformations.dart';
 import 'package:frontend/widgets/calendar/presentation/calendar_view_data.dart';
 
 Map<String, dynamic> _item(String title, {String? date = '2026-10-31'}) => {
@@ -16,6 +17,97 @@ Map<String, dynamic> _item(String title, {String? date = '2026-10-31'}) => {
 };
 
 void main() {
+  test(
+    'missing AI time does not duplicate an unchanged existing reservation',
+    () async {
+      final controller = AiSummaryController(
+        tripId: 1,
+        accessToken: 'token',
+        items: [
+          {'type': 'RESERVATION', 'title': '호텔 예약', 'date': '2026-10-31'},
+        ],
+        scheduleLoader: () async => [
+          TripSchedule(
+            id: 8,
+            tripId: 1,
+            tripTitle: 'trip',
+            title: '호텔 예약',
+            category: '예약',
+            scheduledDate: DateTime(2026, 10, 31),
+            scheduledTime: '14:00:00',
+            description: '예약 비용: 240000원',
+            sortOrder: 0,
+          ),
+        ],
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.isExisting(0), isTrue);
+      expect(controller.isUpdate(0), isFalse);
+      expect(controller.pendingCount, 0);
+    },
+  );
+
+  test('existing reservation updates only after selection and preserves unknown fields', () async {
+    final old = TripSchedule(
+      id: 8,
+      tripId: 1,
+      tripTitle: 'trip',
+      title: '호텔 예약',
+      category: '예약',
+      scheduledDate: DateTime(2026, 10, 31),
+      scheduledTime: '14:00:00',
+      placeName: '호텔',
+      url: 'https://hotel.test',
+      sortOrder: 3,
+      description: '직접 작성한 메모\n예약 비용: 200000원\n예약 인원: 2명',
+    );
+    final updates = <TripSchedule>[];
+    var creates = 0;
+    var fail = true;
+    final controller = AiSummaryController(
+      tripId: 1,
+      accessToken: 'token',
+      items: [
+        {
+          'type': 'RESERVATION',
+          'title': '호텔 예약',
+          'date': '2026-11-01',
+          'placeName': '호텔',
+          'amount': 240000,
+        },
+      ],
+      scheduleLoader: () async => [old],
+      scheduleCreator: (_) async {
+        creates++;
+      },
+      scheduleUpdater: (s) async {
+        if (fail) throw StateError('network');
+        updates.add(s);
+      },
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    expect(controller.isUpdate(0), isTrue);
+    expect(controller.isSelected(0), isFalse);
+    expect(controller.updatePreview(0), contains('240000원'));
+    expect(await controller.saveSchedules(), isNull);
+    controller.select(0, true);
+    expect((await controller.saveSchedules())!.error, isNotNull);
+    expect(controller.isSelected(0), isTrue);
+    fail = false;
+    expect((await controller.saveSchedules())!.savedCount, 1);
+    expect(creates, 0);
+    final updated = updates.single;
+    expect(updated.id, old.id);
+    expect(updated.scheduledDate, DateTime(2026, 11, 1));
+    expect(updated.scheduledTime, old.scheduledTime);
+    expect(updated.url, old.url);
+    expect(updated.description, '직접 작성한 메모\n예약 인원: 2명\n예약 비용: 240000원');
+    expect(calendarReservationCost(updated), '총 240,000원 · 2명');
+    expect(await controller.saveSchedules(), isNull);
+  });
+
   TripSchedule existing(String title) => TripSchedule(
     id: 1,
     tripId: 1,
@@ -24,6 +116,8 @@ void main() {
     scheduledDate: DateTime(2026, 10, 31),
     scheduledTime: '09:30:00',
     placeName: 'place',
+    description: 'memo',
+    url: 'https://example.com',
     category: 'shared',
     sortOrder: 0,
   );
@@ -122,6 +216,8 @@ void main() {
           ..._item('hotel'),
           'type': 'RESERVATION',
           'endDate': '2026-11-02',
+          'amount': 240000,
+          'peopleCount': 2,
           'time': null,
         },
         {..._item('expense'), 'type': 'SETTLEMENT'},
@@ -146,7 +242,43 @@ void main() {
     expect(saved.last.category, '예약');
     expect(saved.last.scheduledTime, isNull);
     expect(saved.last.description, contains('2026-11-02'));
+    expect(saved.last.description, contains('예약 비용: 240000원'));
+    expect(saved.last.description, contains('예약 인원: 2명'));
+    final restored = TripSchedule.fromJson({
+      'id': 2,
+      'tripId': 42,
+      'tripTitle': 'trip',
+      'title': saved.last.title,
+      'category': saved.last.category,
+      'scheduledDate': '2026-10-31',
+      'description': saved.last.description,
+    });
+    expect(calendarTimelineEntryFromSchedule(restored).cost, '총 240,000원 · 2명');
+    expect(calendarTimelineEntryFromSchedule(existing('tour')).cost, '비용 미정');
   });
+
+  test(
+    'reservation cost requires an explicit saved amount and supports zero',
+    () {
+      TripSchedule reservation(String? memo) => TripSchedule(
+        id: 1,
+        tripId: 1,
+        tripTitle: 'trip',
+        title: 'hotel',
+        scheduledDate: DateTime(2026, 10, 31),
+        category: '예약',
+        sortOrder: 0,
+        description: memo,
+      );
+      expect(calendarReservationCost(reservation(null)), '비용 미정');
+      expect(calendarReservationCost(reservation('숙소비 240000원')), '비용 미정');
+      expect(calendarReservationCost(reservation('예약 비용: 0원')), '총 0원');
+      expect(
+        calendarReservationCost(reservation('예약 비용: 90000원')),
+        '총 90,000원',
+      );
+    },
+  );
 
   test(
     'excludes invalid dates, titles, times, and reversed reservation ranges',

@@ -101,6 +101,38 @@ public class ScheduleService {
     }
 
     @Transactional
+    public ScheduleResponse applyAiUpdate(Long scheduleId, Long userId, ScheduleRequest request) {
+        Schedule schedule = findAccessibleSchedule(scheduleId, userId);
+        lockAccessibleTrip(schedule.getTrip().getId(), userId);
+        if (!comparisonText(schedule.getTitle()).equals(comparisonText(request.title()))
+                || !Objects.equals(schedule.getCategory(), normalizeCategory(request.category()))
+                || (normalize(schedule.getPlaceName()) != null && normalize(request.placeName()) != null
+                    && !comparisonText(schedule.getPlaceName()).equals(comparisonText(request.placeName())))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "기존 일정과 연결을 확인할 수 없습니다. 다시 분석해 주세요.");
+        }
+        schedule.update(schedule.getTitle(), schedule.getCategory(), request.scheduledDate(),
+                request.scheduledTime() == null ? schedule.getScheduledTime() : request.scheduledTime(),
+                normalize(request.placeName()) == null ? schedule.getPlaceName() : normalize(request.placeName()),
+                normalize(request.url()) == null ? schedule.getUrl() : normalize(request.url()),
+                mergeAiDescription(schedule.getDescription(), request.description()), schedule.getSortOrder());
+        return ScheduleResponse.from(schedule);
+    }
+
+    static String mergeAiDescription(String previous, String incoming) {
+        var lines = new java.util.ArrayList<String>();
+        if (previous != null) previous.lines().filter(s -> !s.isBlank()).forEach(lines::add);
+        if (incoming != null) {
+            incoming.lines().filter(s -> !s.isBlank()).forEach(line -> {
+                for (String prefix : List.of("예약 종료일:", "예약 비용:", "예약 인원:")) {
+                    if (line.startsWith(prefix)) lines.removeIf(s -> s.startsWith(prefix));
+                }
+                if (!lines.contains(line)) lines.add(line);
+            });
+        }
+        return lines.isEmpty() ? null : String.join("\n", lines);
+    }
+
+    @Transactional
     public ScheduleResponse updateSchedule(
             Long scheduleId,
             Long userId,

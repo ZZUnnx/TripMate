@@ -26,9 +26,19 @@ class AiSummaryController extends ChangeNotifier {
     Future<void> Function(CalendarScheduleDraft draft)? scheduleCreator,
     Future<bool> Function(CalendarScheduleDraft draft)? scheduleImporter,
     Future<List<TripSchedule>> Function()? scheduleLoader,
+    Future<void> Function(TripSchedule schedule)? scheduleUpdater,
   }) : items = List.unmodifiable(
          items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)),
        ),
+       _scheduleUpdater =
+           scheduleUpdater ??
+           ((schedule) async {
+             await ScheduleService.updateSchedule(
+               accessToken: accessToken,
+               schedule: schedule,
+               aiUpdate: true,
+             );
+           }),
        _scheduleLoader =
            scheduleLoader ??
            (() => ScheduleService.fetchTripSchedules(
@@ -64,6 +74,48 @@ class AiSummaryController extends ChangeNotifier {
   }
 
   final List<Map<String, dynamic>> items;
+  final Future<void> Function(TripSchedule schedule) _scheduleUpdater;
+  final _updates = <int, TripSchedule>{};
+  bool isUpdate(int index) => _updates.containsKey(index);
+  String updatePreview(int index) {
+    final old = _updates[index]!;
+    final draft = _drafts[index]!;
+    return '기존: ${old.scheduledDate.toIso8601String().substring(0, 10)} ${old.scheduledTime ?? "시간 미정"}\n'
+        '${old.description ?? "메모 없음"}\n변경: ${draft.scheduledDate.toIso8601String().substring(0, 10)} ${draft.scheduledTime ?? old.scheduledTime ?? "시간 미정"}\n'
+        '${_mergedDescription(old.description, draft.description) ?? "메모 없음"}';
+  }
+
+  static String? _mergedDescription(String? old, String? incoming) {
+    final lines = (old ?? '')
+        .split('\n')
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+    for (final line
+        in (incoming ?? '').split('\n').where((s) => s.trim().isNotEmpty)) {
+      for (final prefix in ['예약 종료일:', '예약 비용:', '예약 인원:']) {
+        if (line.startsWith(prefix)) {
+          lines.removeWhere((s) => s.startsWith(prefix));
+        }
+      }
+      if (!lines.contains(line)) lines.add(line);
+    }
+    return lines.isEmpty ? null : lines.join('\n');
+  }
+
+  static TripSchedule _merged(TripSchedule old, CalendarScheduleDraft draft) =>
+      TripSchedule(
+        id: old.id,
+        tripId: old.tripId,
+        tripTitle: old.tripTitle,
+        title: old.title,
+        category: old.category,
+        scheduledDate: draft.scheduledDate,
+        scheduledTime: draft.scheduledTime ?? old.scheduledTime,
+        placeName: draft.placeName ?? old.placeName,
+        url: draft.url ?? old.url,
+        description: _mergedDescription(old.description, draft.description),
+        sortOrder: old.sortOrder,
+      );
   final Future<bool> Function(CalendarScheduleDraft draft) _scheduleCreator;
   final Future<List<TripSchedule>> Function() _scheduleLoader;
   final _existingIndices = <int>{};
@@ -99,6 +151,7 @@ class AiSummaryController extends ChangeNotifier {
       time == null ? '' : (time.length == 5 ? '$time:00' : time);
   static bool _sameSlot(CalendarScheduleDraft a, CalendarScheduleDraft b) =>
       a.tripId == b.tripId &&
+      (a.category == '예약') == (b.category == '예약') &&
       a.scheduledDate == b.scheduledDate &&
       _time(a.scheduledTime) == _time(b.scheduledTime) &&
       _normalized(a.placeName) == _normalized(b.placeName);
@@ -126,6 +179,43 @@ class AiSummaryController extends ChangeNotifier {
           )
           .toList();
       for (final entry in _drafts.entries) {
+        final draft = entry.value;
+        final matches = schedules
+            .where(
+              (s) =>
+                  s.tripId == draft.tripId &&
+                  (s.category == '예약') == (draft.category == '예약') &&
+                  _normalized(s.title) == _normalized(draft.title) &&
+                  (s.placeName == null ||
+                      draft.placeName == null ||
+                      _normalized(s.placeName) == _normalized(draft.placeName)),
+            )
+            .toList();
+        final exactMatches = matches
+            .where(
+              (s) =>
+                  s.scheduledDate == draft.scheduledDate &&
+                  _time(s.scheduledTime) == _time(draft.scheduledTime),
+            )
+            .toList();
+        final candidates = exactMatches.length == 1 ? exactMatches : matches;
+        if (candidates.length == 1) {
+          final old = candidates.single;
+          final merged = _merged(old, draft);
+          if (merged.scheduledDate != old.scheduledDate ||
+              _time(merged.scheduledTime) != _time(old.scheduledTime) ||
+              merged.placeName != old.placeName ||
+              merged.url != old.url ||
+              merged.description != old.description) {
+            _updates[entry.key] = old;
+            continue;
+          }
+          _existingIndices.add(entry.key);
+          continue;
+        } else if (matches.isNotEmpty) {
+          _suspectedIndices.add(entry.key);
+          continue;
+        }
         if (known.any((s) => _same(entry.value, s))) {
           _existingIndices.add(entry.key);
         } else if (known.any((s) => _sameSlot(entry.value, s))) {
@@ -169,6 +259,12 @@ class AiSummaryController extends ChangeNotifier {
         if (_disposed) break;
         if (!_selectedIndices.contains(entry.key)) continue;
         try {
+          if (_updates.containsKey(entry.key)) {
+            await _scheduleUpdater(_merged(_updates[entry.key]!, entry.value));
+            _savedIndices.add(entry.key);
+            _selectedIndices.remove(entry.key);
+            continue;
+          }
           final created = await _scheduleCreator(entry.value);
           if (created) {
             _savedIndices.add(entry.key);
@@ -224,6 +320,16 @@ class AiSummaryController extends ChangeNotifier {
       final endDate = _date(item['endDate']);
       if (endDate == null || endDate.isBefore(date)) return null;
       description.add('예약 종료일: ${_text(item['endDate'])}');
+    }
+    if (isReservation) {
+      final amount = item['amount'];
+      final peopleCount = item['peopleCount'];
+      if (amount is int && amount >= 0) {
+        description.add('예약 비용: $amount원');
+      }
+      if (peopleCount is int && peopleCount > 0) {
+        description.add('예약 인원: $peopleCount명');
+      }
     }
     return CalendarScheduleDraft(
       tripId: tripId,

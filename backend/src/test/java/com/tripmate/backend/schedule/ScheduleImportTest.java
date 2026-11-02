@@ -70,6 +70,39 @@ class ScheduleImportTest {
     }
 
     @Test
+    void approvedAiUpdatePreservesMissingFieldsAndReplacesReservationCost() {
+        accessible();
+        when(trip.getId()).thenReturn(7L);
+        var existing = new Schedule(trip, "호텔 예약", "예약", LocalDate.of(2026, 10, 31),
+                LocalTime.of(14, 0), "호텔", "https://hotel.test",
+                "사용자 메모\n예약 비용: 200000원\n예약 인원: 2명", 3, user);
+        when(schedules.findById(8L)).thenReturn(Optional.of(existing));
+        var changed = new ScheduleRequest("호텔 예약", "예약", LocalDate.of(2026, 11, 1),
+                null, null, null, "예약 비용: 240000원", null);
+        service.applyAiUpdate(8L, 1L, changed);
+        assertEquals(LocalDate.of(2026, 11, 1), existing.getScheduledDate());
+        assertEquals(LocalTime.of(14, 0), existing.getScheduledTime());
+        assertEquals("https://hotel.test", existing.getUrl());
+        assertEquals("사용자 메모\n예약 인원: 2명\n예약 비용: 240000원", existing.getDescription());
+        assertEquals(3, existing.getSortOrder());
+        service.applyAiUpdate(8L, 1L, changed);
+        assertEquals(1, existing.getDescription().split("예약 비용:", -1).length - 1);
+        verify(schedules, never()).save(any());
+    }
+
+    @Test
+    void aiUpdateRejectsUnrelatedSchedule() {
+        accessible();
+        when(trip.getId()).thenReturn(7L);
+        var existing = new Schedule(trip, "호텔 예약", "예약", LocalDate.of(2026, 10, 31),
+                null, "호텔", null, null, 0, user);
+        when(schedules.findById(8L)).thenReturn(Optional.of(existing));
+        assertThrows(ResponseStatusException.class,
+                () -> service.applyAiUpdate(8L, 1L, request("다른 예약", "호텔")));
+        assertNull(existing.getDescription());
+    }
+
+    @Test
     void unauthorizedUserCannotImportOrInspectSchedules() {
         assertThrows(ResponseStatusException.class,
                 () -> service.importSchedule(7L, 9L, request("tour", null)));
