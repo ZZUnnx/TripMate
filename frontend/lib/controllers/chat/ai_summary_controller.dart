@@ -133,6 +133,8 @@ class AiSummaryController extends ChangeNotifier {
       _existingIndices.contains(index) || _savedIndices.contains(index);
   bool isSuspected(int index) => _suspectedIndices.contains(index);
   bool isEligible(int index) => _drafts.containsKey(index);
+  bool get hasReviewableChanges =>
+      _drafts.keys.any((index) => !isExisting(index));
   bool isSelected(int index) => _selectedIndices.contains(index);
 
   void select(int index, bool selected) {

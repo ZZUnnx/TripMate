@@ -102,11 +102,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final existing = tester.widget<CheckboxListTile>(
-        find.byKey(const ValueKey('schedule-choice-0')),
-      );
-      expect(existing.onChanged, isNull);
-      expect(existing.value, isFalse);
+      expect(find.byKey(const ValueKey('schedule-choice-0')), findsNothing);
       final suspected = find.byKey(const ValueKey('schedule-choice-1'));
       expect(tester.widget<CheckboxListTile>(suspected).value, isFalse);
       await tester.ensureVisible(suspected);
@@ -194,9 +190,9 @@ void main() {
         home: Scaffold(body: AiSummarySheet(controller: controller)),
       ),
     );
-    await tester.ensureVisible(find.text('선택한 일정 추가·업데이트'));
-    await tester.tap(find.text('선택한 일정 추가·업데이트'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('선택한 일정 추가·업데이트'), findsNothing);
+    expect(find.text('추가하거나 업데이트할 일정이 없어요.'), findsOneWidget);
     expect(calls, 0);
     expect(find.textContaining('1개는 제외됩니다'), findsOneWidget);
     expect(tester.takeException(), isNull);

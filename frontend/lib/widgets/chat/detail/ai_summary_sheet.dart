@@ -190,7 +190,8 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                             ],
                             if (controller.isReady) ...[
                               for (var i = 0; i < items.length; i++)
-                                if (controller.isEligible(i))
+                                if (controller.isEligible(i) &&
+                                    !controller.isExisting(i))
                                   Material(
                                     color: Colors.transparent,
                                     child: CheckboxListTile(
@@ -223,9 +224,12 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                                             ),
                                     ),
                                   ),
-                              Text(
-                                '선택 ${controller.pendingCount}개 · 기존 일정 ${controller.existingCount}개 제외',
-                              ),
+                              if (controller.hasReviewableChanges)
+                                Text(
+                                  '선택 ${controller.pendingCount}개 · 기존 일정 ${controller.existingCount}개 제외',
+                                )
+                              else
+                                const Text('추가하거나 업데이트할 일정이 없어요.'),
                             ],
                             const ResponsiveGap(height: 8),
                             Text(
@@ -250,16 +254,19 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                               ),
                             ],
                             const ResponsiveGap(height: 8),
-                            _SummaryPrimaryButton(
-                              isSaving: controller.isSaving,
-                              isRetry: controller.savedCount > 0,
-                              onTap:
-                                  controller.isSaving ||
-                                      !controller.isReady ||
-                                      controller.pendingCount == 0
-                                  ? null
-                                  : _saveSchedules,
-                            ),
+                            if (controller.isSaving ||
+                                (controller.isReady &&
+                                    controller.hasReviewableChanges))
+                              _SummaryPrimaryButton(
+                                isSaving: controller.isSaving,
+                                isRetry: controller.savedCount > 0,
+                                onTap:
+                                    controller.isSaving ||
+                                        !controller.isReady ||
+                                        controller.pendingCount == 0
+                                    ? null
+                                    : _saveSchedules,
+                              ),
                           ],
                         ),
                       ),
