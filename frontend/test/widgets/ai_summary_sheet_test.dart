@@ -104,12 +104,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('schedule-choice-0')), findsNothing);
       final suspected = find.byKey(const ValueKey('schedule-choice-1'));
-      expect(tester.widget<CheckboxListTile>(suspected).value, isFalse);
-      await tester.ensureVisible(suspected);
-      await tester.tap(suspected);
-      await tester.pump();
-      expect(tester.widget<CheckboxListTile>(suspected).value, isTrue);
-      expect(controller.pendingCount, 1);
+      expect(suspected, findsNothing);
+      expect(find.textContaining('중복 의심'), findsNothing);
+      expect(find.text('선택한 일정 추가·업데이트'), findsNothing);
+      expect(controller.pendingCount, 0);
       expect(tester.takeException(), isNull);
     },
   );

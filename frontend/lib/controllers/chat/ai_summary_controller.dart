@@ -133,8 +133,9 @@ class AiSummaryController extends ChangeNotifier {
       _existingIndices.contains(index) || _savedIndices.contains(index);
   bool isSuspected(int index) => _suspectedIndices.contains(index);
   bool isEligible(int index) => _drafts.containsKey(index);
-  bool get hasReviewableChanges =>
-      _drafts.keys.any((index) => !isExisting(index));
+  bool isReviewable(int index) =>
+      isEligible(index) && !isExisting(index) && !isSuspected(index);
+  bool get hasReviewableChanges => _drafts.keys.any(isReviewable);
   bool isSelected(int index) => _selectedIndices.contains(index);
 
   void select(int index, bool selected) {
@@ -142,6 +143,7 @@ class AiSummaryController extends ChangeNotifier {
         !_initialized ||
         _isSaving ||
         isExisting(index) ||
+        isSuspected(index) ||
         !isEligible(index)) {
       return;
     }
@@ -210,8 +212,10 @@ class AiSummaryController extends ChangeNotifier {
               _time(merged.scheduledTime) != _time(old.scheduledTime) ||
               merged.placeName != old.placeName ||
               merged.url != old.url ||
-              merged.description != old.description ||
-              merged.sortOrder != old.sortOrder) {
+              _reservationDetails(merged.description) !=
+                  _reservationDetails(old.description) ||
+              (old.sortOrder <= TripSchedule.inferredOrderBase &&
+                  merged.sortOrder > TripSchedule.inferredOrderBase)) {
             _updates[entry.key] = old;
             continue;
           }
@@ -221,7 +225,9 @@ class AiSummaryController extends ChangeNotifier {
           _suspectedIndices.add(entry.key);
           continue;
         }
-        if (known.any((s) => _same(entry.value, s))) {
+        if (schedules.any((s) => _likelySameActivity(s, draft))) {
+          _suspectedIndices.add(entry.key);
+        } else if (known.any((s) => _same(entry.value, s))) {
           _existingIndices.add(entry.key);
         } else if (known.any((s) => _sameSlot(entry.value, s))) {
           _suspectedIndices.add(entry.key);
@@ -304,7 +310,56 @@ class AiSummaryController extends ChangeNotifier {
   }
 
   static bool _isCalendarItem(Map<String, dynamic> item) =>
-      item['type'] == 'SCHEDULE' || item['type'] == 'RESERVATION';
+      (item['type'] == 'SCHEDULE' || item['type'] == 'RESERVATION') &&
+      !_isBookingTask(item);
+
+  static String _reservationDetails(String? memo) {
+    final lines =
+        (memo ?? '')
+            .split('\n')
+            .where((line) => RegExp(r'^예약 (종료일|비용|인원):').hasMatch(line))
+            .map(_normalized)
+            .toList()
+          ..sort();
+    return lines.join('\n');
+  }
+
+  static String _activityName(String title) =>
+      _normalized(title)
+          .replaceAll('렌트카', '렌터카')
+          .replaceAll('비행기', '항공권')
+          .replaceAll('호텔', '숙소')
+          .replaceAll(RegExp(r'(예약|예매|완료|확정|여행|일정)'), '');
+
+  static bool _likelySameActivity(
+    TripSchedule old,
+    CalendarScheduleDraft draft,
+  ) {
+    if (old.tripId != draft.tripId ||
+        old.scheduledDate != draft.scheduledDate ||
+        (old.category == '예약') != (draft.category == '예약')) {
+      return false;
+    }
+    if (old.scheduledTime != null &&
+        draft.scheduledTime != null &&
+        _time(old.scheduledTime) != _time(draft.scheduledTime)) {
+      return false;
+    }
+    final left = _activityName(old.title);
+    final right = _activityName(draft.title);
+    if (left.isEmpty || right.isEmpty) return false;
+    return left == right ||
+        (left.length >= 3 &&
+            right.length >= 3 &&
+            (left.contains(right) || right.contains(left)));
+  }
+
+  static bool _isBookingTask(Map<String, dynamic> item) {
+    final title = _text(item['title']) ?? '';
+    return RegExp(r'(예약|예매)\s*(하기|하자|해야|할\s*예정|준비|진행|해두기|하기로)')
+            .hasMatch(title) ||
+        RegExp(r'예매\s*$').hasMatch(title);
+  }
 
   static CalendarScheduleDraft? _toDraft(
     Map<String, dynamic> item,

@@ -17,6 +17,71 @@ Map<String, dynamic> _item(String title, {String? date = '2026-10-31'}) => {
 };
 
 void main() {
+  test('reanalysis hides paraphrases and inferred order jitter but keeps real changes', () async {
+    TripSchedule old(String title, String category, {int order = 100660}) =>
+        TripSchedule(
+          id: title.hashCode,
+          tripId: 1,
+          tripTitle: 'trip',
+          title: title,
+          category: category,
+          scheduledDate: DateTime(2026, 12, 16),
+          sortOrder: order,
+          description: '기존 설명',
+        );
+    final controller = AiSummaryController(
+      tripId: 1,
+      accessToken: 'token',
+      scheduleLoader: () async => [
+        old('오키나와 여행 항공권', '예약'),
+        old('렌트카 예약', '예약'),
+        old('국제거리 구경', '공유 여행'),
+      ],
+      items: [
+        {'type': 'RESERVATION', 'title': '비행기 예약', 'date': '2026-12-16'},
+        {'type': 'RESERVATION', 'title': '렌터카 예약', 'date': '2026-12-16'},
+        {
+          'type': 'SCHEDULE',
+          'title': '국제거리 구경',
+          'date': '2026-12-16',
+          'sortOrder': 700,
+          'description': '국제거리 관광 예정',
+        },
+      ],
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    expect(controller.hasReviewableChanges, isFalse);
+    expect(controller.pendingCount, 0);
+    expect(controller.isExisting(2), isTrue);
+  });
+
+  test(
+    'booking tasks are excluded while actual reservations remain eligible',
+    () async {
+      final controller = AiSummaryController(
+        tripId: 1,
+        accessToken: 'token',
+        scheduleLoader: () async => [],
+        items: [
+          _item('항공권 예매'),
+          _item('호텔 예약하기'),
+          _item('기차 예매하자'),
+          {..._item('호텔 예약'), 'type': 'RESERVATION'},
+          {..._item('항공권 예매 완료'), 'type': 'RESERVATION'},
+        ],
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.isEligible(0), isFalse);
+      expect(controller.isEligible(1), isFalse);
+      expect(controller.isEligible(2), isFalse);
+      expect(controller.isEligible(3), isTrue);
+      expect(controller.isEligible(4), isTrue);
+      expect(controller.skippedCount, 0);
+    },
+  );
+
   test(
     'missing AI time does not duplicate an unchanged existing reservation',
     () async {
@@ -148,9 +213,9 @@ void main() {
       expect(controller.isSelected(0), isFalse);
       controller.select(1, true);
       final result = await controller.saveSchedules();
-      expect(saved, ['meal', 'tour']);
+      expect(saved, ['tour']);
       expect(result!.existingCount, 1);
-      expect(result.savedCount, 2);
+      expect(result.savedCount, 1);
     },
   );
 

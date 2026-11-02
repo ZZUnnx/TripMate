@@ -190,8 +190,7 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                             ],
                             if (controller.isReady) ...[
                               for (var i = 0; i < items.length; i++)
-                                if (controller.isEligible(i) &&
-                                    !controller.isExisting(i))
+                                if (controller.isReviewable(i))
                                   Material(
                                     color: Colors.transparent,
                                     child: CheckboxListTile(
