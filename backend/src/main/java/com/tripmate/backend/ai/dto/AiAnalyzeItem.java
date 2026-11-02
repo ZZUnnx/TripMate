@@ -16,6 +16,7 @@ public record AiAnalyzeItem(
 
         // 공통
         String description,
-        String url
+        String url,
+        Integer sortOrder
 ) {
 }

@@ -1,4 +1,49 @@
 class TripSchedule {
+  // Keep inferred positions separate from legacy/manual ordinal values.
+  static const inferredOrderBase = 100000;
+
+  /// Unknown times use a display position, without inventing a scheduled time.
+  static int compareChronologically(TripSchedule left, TripSchedule right) {
+    final leftDay = DateTime(
+      left.scheduledDate.year,
+      left.scheduledDate.month,
+      left.scheduledDate.day,
+    );
+    final rightDay = DateTime(
+      right.scheduledDate.year,
+      right.scheduledDate.month,
+      right.scheduledDate.day,
+    );
+    final dateCompare = leftDay.compareTo(rightDay);
+    if (dateCompare != 0) return dateCompare;
+    final positionCompare = _displayPosition(left)
+        .compareTo(_displayPosition(right));
+    if (positionCompare != 0) return positionCompare;
+    final orderCompare = left.sortOrder.compareTo(right.sortOrder);
+    return orderCompare != 0 ? orderCompare : left.id.compareTo(right.id);
+  }
+
+  static double _displayPosition(TripSchedule schedule) {
+    final parts = schedule.scheduledTime?.split(':');
+    if (parts != null && parts.length >= 2) {
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      final second = parts.length > 2 ? double.tryParse(parts[2]) ?? 0 : 0;
+      if (hour != null &&
+          hour >= 0 &&
+          hour < 24 &&
+          minute != null &&
+          minute >= 0 &&
+          minute < 60) {
+        return hour * 60 + minute + 1 + second / 60;
+      }
+    }
+    final inferredPosition = schedule.sortOrder - inferredOrderBase;
+    return inferredPosition >= 1 && inferredPosition <= 1440
+        ? inferredPosition.toDouble()
+        : 1442;
+  }
+
   const TripSchedule({
     required this.id,
     required this.tripId,

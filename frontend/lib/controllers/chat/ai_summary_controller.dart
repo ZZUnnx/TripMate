@@ -61,6 +61,7 @@ class AiSummaryController extends ChangeNotifier {
                      'placeName': draft.placeName,
                      'url': draft.url,
                      'description': draft.description,
+                     'sortOrder': draft.sortOrder,
                    },
                  ))
                : ((draft) async {
@@ -82,7 +83,8 @@ class AiSummaryController extends ChangeNotifier {
     final draft = _drafts[index]!;
     return '기존: ${old.scheduledDate.toIso8601String().substring(0, 10)} ${old.scheduledTime ?? "시간 미정"}\n'
         '${old.description ?? "메모 없음"}\n변경: ${draft.scheduledDate.toIso8601String().substring(0, 10)} ${draft.scheduledTime ?? old.scheduledTime ?? "시간 미정"}\n'
-        '${_mergedDescription(old.description, draft.description) ?? "메모 없음"}';
+        '${_mergedDescription(old.description, draft.description) ?? "메모 없음"}'
+        '${draft.sortOrder != null && draft.sortOrder != old.sortOrder ? "\n대화 흐름에 맞춰 표시 순서 변경" : ""}';
   }
 
   static String? _mergedDescription(String? old, String? incoming) {
@@ -114,7 +116,7 @@ class AiSummaryController extends ChangeNotifier {
         placeName: draft.placeName ?? old.placeName,
         url: draft.url ?? old.url,
         description: _mergedDescription(old.description, draft.description),
-        sortOrder: old.sortOrder,
+        sortOrder: draft.sortOrder ?? old.sortOrder,
       );
   final Future<bool> Function(CalendarScheduleDraft draft) _scheduleCreator;
   final Future<List<TripSchedule>> Function() _scheduleLoader;
@@ -206,7 +208,8 @@ class AiSummaryController extends ChangeNotifier {
               _time(merged.scheduledTime) != _time(old.scheduledTime) ||
               merged.placeName != old.placeName ||
               merged.url != old.url ||
-              merged.description != old.description) {
+              merged.description != old.description ||
+              merged.sortOrder != old.sortOrder) {
             _updates[entry.key] = old;
             continue;
           }
@@ -342,6 +345,12 @@ class AiSummaryController extends ChangeNotifier {
       placeName: _text(item['placeName']),
       url: _text(item['url']),
       description: description.isEmpty ? null : description.join('\n'),
+      sortOrder:
+          item['sortOrder'] is int &&
+              item['sortOrder'] >= 1 &&
+              item['sortOrder'] <= 1440
+          ? TripSchedule.inferredOrderBase + (item['sortOrder'] as int)
+          : null,
     );
   }
 

@@ -85,7 +85,12 @@ class ScheduleImportTest {
         assertEquals("https://hotel.test", existing.getUrl());
         assertEquals("사용자 메모\n예약 인원: 2명\n예약 비용: 240000원", existing.getDescription());
         assertEquals(3, existing.getSortOrder());
+        var reordered = new ScheduleRequest("호텔 예약", "예약", LocalDate.of(2026, 11, 1),
+                null, null, null, null, 100661);
+        service.applyAiUpdate(8L, 1L, reordered);
+        assertEquals(100661, existing.getSortOrder());
         service.applyAiUpdate(8L, 1L, changed);
+        assertEquals(100661, existing.getSortOrder());
         assertEquals(1, existing.getDescription().split("예약 비용:", -1).length - 1);
         verify(schedules, never()).save(any());
     }

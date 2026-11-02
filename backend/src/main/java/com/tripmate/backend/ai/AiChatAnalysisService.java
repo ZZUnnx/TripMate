@@ -98,6 +98,11 @@ public class AiChatAnalysisService {
                 11. 알 수 없는 값은 반드시 null로 작성한다.
                 12. URL이 있으면 관련 항목의 url에 넣는다.
                 13. 항목을 통합할 때 서로 다른 예약이나 비용을 잘못 합치지 않는다.
+                14. 일정/예약에는 날짜 안에서의 표시 위치 sortOrder를 작성한다. 실제 시각이 확인되면 (시 * 60 + 분 + 1)이다.
+                15. 시간이 없는 항목은 채팅 전송 순서가 아니라 '도착 후', '점심 먹고', '체크인 전' 등 활동의 선후관계로 표시 위치를 정한다.
+                16. 예: 10:00 도착은 sortOrder 601, 그 뒤 시각 미정 체크인과 12:00 점심 사이에 체크인이 있으면 sortOrder 661처럼 두 기준 사이 값을 사용한다.
+                17. sortOrder는 1~1440 정수이며 표시 위치일 뿐 실제 시간이 아니다. 실제 시간이 없으면 time은 반드시 null로 유지한다.
+                18. 선후관계도 판단할 수 없으면 sortOrder는 null로 둔다. 정산 항목의 sortOrder도 null이다.
 
                 SCHEDULE 규칙:
                 - type은 "SCHEDULE"
@@ -140,7 +145,8 @@ public class AiChatAnalysisService {
                       "amount": null,
                       "peopleCount": null,
                       "description": "OO 일정 설명",
-                      "url": null
+                      "url": null,
+                      "sortOrder": null
                     },
                     {
                       "type": "RESERVATION",
@@ -152,7 +158,8 @@ public class AiChatAnalysisService {
                       "amount": null,
                       "peopleCount": null,
                       "description": "OO 예약 설명",
-                      "url": null
+                      "url": null,
+                      "sortOrder": null
                     },
                     {
                       "type": "SETTLEMENT",
@@ -164,7 +171,8 @@ public class AiChatAnalysisService {
                       "amount": 0,
                       "peopleCount": 0,
                       "description": "OO 비용 정산",
-                      "url": null
+                      "url": null,
+                      "sortOrder": null
                     }
                   ]
                 }

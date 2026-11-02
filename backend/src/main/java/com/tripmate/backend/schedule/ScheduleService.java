@@ -114,7 +114,8 @@ public class ScheduleService {
                 request.scheduledTime() == null ? schedule.getScheduledTime() : request.scheduledTime(),
                 normalize(request.placeName()) == null ? schedule.getPlaceName() : normalize(request.placeName()),
                 normalize(request.url()) == null ? schedule.getUrl() : normalize(request.url()),
-                mergeAiDescription(schedule.getDescription(), request.description()), schedule.getSortOrder());
+                mergeAiDescription(schedule.getDescription(), request.description()),
+                request.sortOrder() == null ? schedule.getSortOrder() : request.sortOrder());
         return ScheduleResponse.from(schedule);
     }
 

@@ -230,27 +230,7 @@ class ScheduleService {
   }
 
   static int _compareSchedules(TripSchedule left, TripSchedule right) {
-    final dateCompare = left.scheduledDate.compareTo(right.scheduledDate);
-
-    if (dateCompare != 0) {
-      return dateCompare;
-    }
-
-    final leftTime = left.scheduledTime ?? '';
-    final rightTime = right.scheduledTime ?? '';
-    final timeCompare = leftTime.compareTo(rightTime);
-
-    if (timeCompare != 0) {
-      return timeCompare;
-    }
-
-    final orderCompare = left.sortOrder.compareTo(right.sortOrder);
-
-    if (orderCompare != 0) {
-      return orderCompare;
-    }
-
-    return left.id.compareTo(right.id);
+    return TripSchedule.compareChronologically(left, right);
   }
 
   static String _formatDate(DateTime date) {

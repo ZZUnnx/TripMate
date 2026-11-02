@@ -75,6 +75,7 @@ void main() {
           'date': '2026-11-01',
           'placeName': '호텔',
           'amount': 240000,
+          'sortOrder': 661,
         },
       ],
       scheduleLoader: () async => [old],
@@ -218,6 +219,7 @@ void main() {
           'endDate': '2026-11-02',
           'amount': 240000,
           'peopleCount': 2,
+          'sortOrder': 661,
           'time': null,
         },
         {..._item('expense'), 'type': 'SETTLEMENT'},
@@ -244,6 +246,7 @@ void main() {
     expect(saved.last.description, contains('2026-11-02'));
     expect(saved.last.description, contains('예약 비용: 240000원'));
     expect(saved.last.description, contains('예약 인원: 2명'));
+    expect(saved.last.sortOrder, TripSchedule.inferredOrderBase + 661);
     final restored = TripSchedule.fromJson({
       'id': 2,
       'tripId': 42,

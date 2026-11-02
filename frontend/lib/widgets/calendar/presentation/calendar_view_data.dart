@@ -92,6 +92,7 @@ class CalendarScheduleDraft {
     this.placeName,
     this.url,
     this.description,
+    this.sortOrder,
   });
 
   final int tripId;
@@ -102,4 +103,5 @@ class CalendarScheduleDraft {
   final String? placeName;
   final String? url;
   final String? description;
+  final int? sortOrder;
 }
