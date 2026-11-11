@@ -5,14 +5,17 @@ import '../../providers/auth_provider.dart';
 import '../common/responsive.dart';
 
 class HomeProfileCard extends StatelessWidget {
-  const HomeProfileCard({super.key});
+  const HomeProfileCard({super.key, this.tripCount, this.companionCount});
+
+  final int? tripCount;
+  final int? companionCount;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final name = auth.nickname?.trim().isNotEmpty == true
         ? auth.nickname!.trim()
-        : '김민지';
+        : '여행자';
     final initial = name.characters.first;
 
     return Container(
@@ -70,7 +73,7 @@ class HomeProfileCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(context.rs(999)),
                       ),
                       child: Text(
-                        '여행 마스터',
+                        '여행 메이트',
                         style: TextStyle(
                           color: const Color(0xFF0B5F55),
                           fontSize: context.rs(9),
@@ -82,7 +85,9 @@ class HomeProfileCard extends StatelessWidget {
                 ),
                 const ResponsiveGap(height: 3),
                 Text(
-                  auth.isLoggedIn ? '총 12번의 여행 · 4명과 함께' : '로그인하고 여행을 시작해보세요',
+                  auth.isLoggedIn
+                      ? '참여 여행 ${tripCount ?? '—'}개 · 동행 ${companionCount ?? '—'}명'
+                      : '로그인하고 여행을 시작해보세요',
                   style: TextStyle(
                     color: const Color(0xFF60706D),
                     fontSize: context.rs(11),

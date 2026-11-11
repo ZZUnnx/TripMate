@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/chat/ai_summary_controller.dart';
+import '../../../models/settlement.dart';
 import '../../common/responsive.dart';
+import '../../settlement/expense_editor_sheet.dart';
 
 class AiSummarySheet extends StatefulWidget {
-  const AiSummarySheet({super.key, required this.controller});
+  const AiSummarySheet({
+    super.key,
+    required this.controller,
+    this.currentUserId = 0,
+  });
 
   final AiSummaryController controller;
+  final int currentUserId;
 
   @override
   State<AiSummarySheet> createState() => _AiSummarySheetState();
@@ -14,6 +21,51 @@ class AiSummarySheet extends StatefulWidget {
 
 class _AiSummarySheetState extends State<AiSummarySheet> {
   AiSummaryController get controller => widget.controller;
+  bool _editingExpense = false;
+
+  Future<void> _editExpense(int index) async {
+    if (_editingExpense || controller.isSaving) return;
+    setState(() => _editingExpense = true);
+    try {
+      final data = await controller.loadSettlement();
+      if (!mounted) return;
+      if (data.members.isEmpty) throw StateError('여행 참여자가 없습니다.');
+      final item = controller.items[index];
+      final payer = data.members.any((m) => m.userId == widget.currentUserId)
+          ? widget.currentUserId
+          : data.members.first.userId;
+      final draft = await showModalBottomSheet<ExpenseDraft>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        builder: (_) => ExpenseEditorSheet(
+          members: data.members,
+          currentUserId: widget.currentUserId,
+          submitLabel: '요약에 반영',
+          initialDraft:
+              controller.expenseDraft(index) ??
+              ExpenseDraft(
+                title: item['title']?.toString() ?? '',
+                amount: int.tryParse(item['amount'].toString()) ?? 0,
+                payerId: payer,
+                date:
+                    DateTime.tryParse(item['date']?.toString() ?? '') ??
+                    DateTime.now(),
+                participantIds: data.members.map((m) => m.userId).toList(),
+                placeName: item['placeName']?.toString(),
+              ),
+        ),
+      );
+      if (mounted && draft != null) controller.confirmExpense(index, draft);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('지출 정보를 불러오지 못했어요: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _editingExpense = false);
+    }
+  }
 
   @override
   void initState() {
@@ -97,7 +149,7 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                         ),
                         const ResponsiveGap(height: 2),
                         Text(
-                          '현재까지 대화에서 찾은 정보를 검토하고 공유 일정에 추가해 주세요',
+                          '대화에서 찾은 일정과 정산 정보를 확인하고 저장해 주세요',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -224,11 +276,63 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                               Text(
                                 '선택 ${controller.pendingCount}개 · 기존 일정 ${controller.existingCount}개 제외',
                               ),
+                              for (var i = 0; i < items.length; i++)
+                                if (controller.isExpenseCandidate(i))
+                                  ListTile(
+                                    key: ValueKey('expense-choice-$i'),
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(
+                                      controller.expenseDraft(i)?.title ??
+                                          items[i]['title']?.toString() ??
+                                          '지출',
+                                    ),
+                                    subtitle: Text(
+                                      controller.isExpenseExisting(i)
+                                          ? '정산에 추가됨'
+                                          : controller.expenseDraft(i) == null
+                                          ? '금액·결제자·분담 대상·지출일 확인 필요'
+                                          : '${settlementWon(controller.expenseDraft(i)!.amount)} · 저장 대상',
+                                    ),
+                                    trailing: controller.isExpenseExisting(i)
+                                        ? const Icon(Icons.check)
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              TextButton(
+                                                onPressed:
+                                                    controller.isSaving ||
+                                                        _editingExpense
+                                                    ? null
+                                                    : () => _editExpense(i),
+                                                child: Text(
+                                                  controller.expenseDraft(i) ==
+                                                          null
+                                                      ? '확인'
+                                                      : '수정',
+                                                ),
+                                              ),
+                                              if (controller.expenseDraft(i) !=
+                                                  null)
+                                                IconButton(
+                                                  tooltip: '저장 대상에서 제외',
+                                                  onPressed:
+                                                      controller.isSaving ||
+                                                          _editingExpense
+                                                      ? null
+                                                      : () => controller
+                                                            .removeExpense(i),
+                                                  icon: const Icon(Icons.close),
+                                                ),
+                                            ],
+                                          ),
+                                  ),
+                              if (_editingExpense)
+                                const Text('지출 정보를 확인하고 있어요.'),
                             ],
                             const ResponsiveGap(height: 8),
                             Text(
                               '검토 대상 일정·예약 ${controller.eligibleCount}개. '
-                              '정산 정보는 캘린더에 추가하지 않습니다.',
+                              '확인한 지출 ${controller.pendingExpenseCount}개는 정산에 저장됩니다.',
                               style: TextStyle(fontSize: context.rs(11)),
                             ),
                             if (controller.skippedCount > 0)
@@ -251,8 +355,10 @@ class _AiSummarySheetState extends State<AiSummarySheet> {
                             _SummaryPrimaryButton(
                               isSaving: controller.isSaving,
                               isRetry: controller.savedCount > 0,
+                              hasExpenses: controller.hasExpenses,
                               onTap:
                                   controller.isSaving ||
+                                      _editingExpense ||
                                       !controller.isReady ||
                                       controller.pendingCount == 0
                                   ? null
@@ -586,7 +692,7 @@ class _SummaryNotice extends StatelessWidget {
           const ResponsiveGap(width: 7),
           Expanded(
             child: Text(
-              '내용을 확인한 뒤 직접 추가해 주세요. 예약은 시작일에 표시되며 종료일은 메모에 저장됩니다.',
+              '예약은 시작일에 표시되며 종료일은 메모에 저장됩니다. 지출은 결제자와 분담 대상을 확인해 주세요. 기본값은 본인 결제·여행 참여자 전원 분담입니다.',
               style: TextStyle(
                 color: const Color(0xFF0B5F55),
                 fontSize: context.rs(9),
@@ -606,11 +712,13 @@ class _SummaryPrimaryButton extends StatelessWidget {
     required this.onTap,
     required this.isSaving,
     required this.isRetry,
+    required this.hasExpenses,
   });
 
   final VoidCallback? onTap;
   final bool isSaving;
   final bool isRetry;
+  final bool hasExpenses;
 
   @override
   Widget build(BuildContext context) {
@@ -634,7 +742,11 @@ class _SummaryPrimaryButton extends StatelessWidget {
               ),
               const ResponsiveGap(width: 7),
               Text(
-                isSaving ? '저장 중...' : (isRetry ? '남은 일정 다시 추가' : '공유 일정에 추가'),
+                isSaving
+                    ? '저장 중...'
+                    : (isRetry
+                          ? '남은 항목 다시 저장'
+                          : (hasExpenses ? '선택한 일정·정산 저장' : '공유 일정에 추가')),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: context.rs(12),

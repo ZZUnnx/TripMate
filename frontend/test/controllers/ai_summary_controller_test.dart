@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/controllers/chat/ai_summary_controller.dart';
 import 'package:frontend/models/trip_schedule.dart';
+import 'package:frontend/models/settlement.dart';
 import 'package:frontend/widgets/calendar/presentation/calendar_view_data.dart';
+
+import '../fixtures/settlement_fixture.dart';
 
 Map<String, dynamic> _item(String title, {String? date = '2026-10-31'}) => {
   'type': 'SCHEDULE',
@@ -16,6 +19,140 @@ Map<String, dynamic> _item(String title, {String? date = '2026-10-31'}) => {
 };
 
 void main() {
+  ExpenseDraft expense({String title = '식사', int amount = 10000}) =>
+      ExpenseDraft(
+        title: title,
+        amount: amount,
+        payerId: 1,
+        date: DateTime(2026, 10, 31),
+        participantIds: const [2, 1],
+        placeName: '식당',
+      );
+
+  test(
+    'saves confirmed settlement and reservation amounts with schedules',
+    () async {
+      final expenses = <ExpenseDraft>[];
+      final schedules = <CalendarScheduleDraft>[];
+      final controller = AiSummaryController(
+        tripId: 42,
+        accessToken: 'token',
+        items: [
+          _item('tour'),
+          {..._item('hotel'), 'type': 'RESERVATION', 'amount': 80000},
+          {'type': 'SETTLEMENT', 'title': '식사', 'amount': 10000},
+          {'type': 'SETTLEMENT', 'title': '미확인', 'amount': null},
+        ],
+        scheduleLoader: () async => [],
+        settlementLoader: () async =>
+            settlementFixture(tripId: 42, empty: true),
+        scheduleCreator: (draft) async => schedules.add(draft),
+        expenseCreator: (draft) async => expenses.add(draft),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.isExpenseCandidate(1), isTrue);
+      expect(controller.pendingCount, 2);
+      controller.confirmExpense(1, expense(title: 'hotel', amount: 80000));
+      controller.confirmExpense(2, expense());
+      expect(controller.pendingCount, 4);
+      final result = await controller.saveSchedules();
+      expect(result!.savedCount, 4);
+      expect(result.remainingCount, 0);
+      expect(controller.savedExpenseCount, 2);
+      expect(schedules.map((s) => s.tripId), [42, 42]);
+      expect(expenses.map((e) => e.amount), [80000, 10000]);
+      expect(expenses.last.toJson()['participantIds'], [2, 1]);
+      expect(await controller.saveSchedules(), isNull);
+    },
+  );
+
+  test('existing and repeated expenses are excluded, and excluded drafts stay unsaved', () async {
+    var calls = 0;
+    final controller = AiSummaryController(
+      tripId: 1,
+      accessToken: 'token',
+      items: List.generate(4, (_) => {'type': 'SETTLEMENT', 'title': '식사'}),
+      scheduleLoader: () async => [],
+      settlementLoader: () async => settlementFixture(),
+      expenseCreator: (_) async => calls++,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    controller.confirmExpense(0, expense());
+    controller.confirmExpense(1, expense(amount: 20000));
+    controller.confirmExpense(2, expense(amount: 20000));
+    controller.confirmExpense(3, expense(amount: 30000));
+    controller.removeExpense(3);
+    final result = await controller.saveSchedules();
+    expect(calls, 1);
+    expect(result!.savedCount, 1);
+    expect(controller.existingExpenseCount, 2);
+    expect(result.remainingCount, 0);
+  });
+
+  test('expense retry preserves saved schedules and expenses', () async {
+    var scheduleCalls = 0;
+    final attempts = <int>[];
+    var fail = true;
+    final controller = AiSummaryController(
+      tripId: 1,
+      accessToken: 'token',
+      items: [
+        _item('tour'),
+        {'type': 'SETTLEMENT'},
+        {'type': 'SETTLEMENT'},
+      ],
+      scheduleLoader: () async => [],
+      settlementLoader: () async => settlementFixture(empty: true),
+      scheduleCreator: (_) async => scheduleCalls++,
+      expenseCreator: (draft) async {
+        attempts.add(draft.amount);
+        if (draft.amount == 20000 && fail) throw StateError('offline');
+      },
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    controller.confirmExpense(1, expense());
+    controller.confirmExpense(2, expense(amount: 20000));
+    final partial = await controller.saveSchedules();
+    expect(partial!.savedCount, 2);
+    expect(partial.remainingCount, 1);
+    expect(partial.error, isNotNull);
+    fail = false;
+    final result = await controller.saveSchedules();
+    expect(result!.savedCount, 3);
+    expect(result.remainingCount, 0);
+    expect(scheduleCalls, 1);
+    expect(attempts, [10000, 20000, 20000]);
+  });
+
+  test('lost expense response is reconciled with server on retry', () async {
+    var calls = 0;
+    final controller = AiSummaryController(
+      tripId: 1,
+      accessToken: 'token',
+      items: [
+        {'type': 'SETTLEMENT'},
+      ],
+      scheduleLoader: () async => [],
+      settlementLoader: () async => settlementFixture(empty: calls == 0),
+      expenseCreator: (_) async {
+        calls++;
+        throw StateError('lost response');
+      },
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    controller.confirmExpense(0, expense());
+    expect((await controller.saveSchedules())!.error, isNotNull);
+    final retry = await controller.saveSchedules();
+    expect(retry!.error, isNull);
+    expect(retry.remainingCount, 0);
+    expect(controller.existingExpenseCount, 1);
+    expect(calls, 1);
+  });
+
   TripSchedule existing(String title) => TripSchedule(
     id: 1,
     tripId: 1,

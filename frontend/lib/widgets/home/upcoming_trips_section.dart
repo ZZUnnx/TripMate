@@ -1,38 +1,46 @@
 import 'package:flutter/material.dart';
 
+import '../../models/home_data.dart';
+import '../../models/trip.dart';
 import '../common/responsive.dart';
 import 'home_section_header.dart';
 
 class UpcomingTripsSection extends StatelessWidget {
-  const UpcomingTripsSection({super.key});
-
+  const UpcomingTripsSection({
+    super.key,
+    required this.data,
+    this.onTripTap,
+    this.onViewAll,
+  });
+  final HomeData data;
+  final ValueChanged<Trip>? onTripTap;
+  final VoidCallback? onViewAll;
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: const [
-        HomeSectionHeader(title: '예정된 여행', action: '+ 새 여행'),
-        _TripListItem(
-          emoji: '🏯',
-          emojiBackground: Color(0xFF4E79C7),
-          title: '오사카 겨울 여행',
-          status: '계획 중',
-          trailing: 'D-78',
-          description: '12월 예정 · 4명과 함께',
-          statusColor: Color(0xFF4E79C7),
-          statusBackground: Color(0xFFEAF0FB),
+  Widget build(BuildContext context) => Column(
+    children: [
+      HomeSectionHeader(title: '예정된 여행', action: '전체 보기', onAction: onViewAll),
+      if (data.upcomingTrips.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(18),
+          child: Text('예정된 여행이 없습니다.'),
         ),
-        _TripListItem(
-          emoji: '🌊',
-          emojiBackground: Color(0xFFE9E1F5),
-          title: '강릉 당일치기',
-          status: '완료',
-          trailing: '3월 2일',
-          description: '✓ 정산 완료',
-          muted: true,
+      for (final trip in data.upcomingTrips.take(5))
+        InkWell(
+          onTap: onTripTap == null ? null : () => onTripTap!(trip),
+          child: _TripListItem(
+            emoji: '✈',
+            emojiBackground: const Color(0xFFDDF3EE),
+            title: trip.title,
+            status: trip.startDate == null ? '날짜 미정' : '예정',
+            trailing: homeTripStatus(trip, data.now),
+            description: [
+              homeTripPeriod(trip),
+              if (trip.destination != null) trip.destination!,
+            ].join(' · '),
+          ),
         ),
-      ],
-    );
-  }
+    ],
+  );
 }
 
 class _TripListItem extends StatelessWidget {
@@ -43,9 +51,6 @@ class _TripListItem extends StatelessWidget {
     required this.status,
     required this.trailing,
     required this.description,
-    this.statusColor = const Color(0xFF8A9895),
-    this.statusBackground = const Color(0xFFF0F5F4),
-    this.muted = false,
   });
 
   final String emoji;
@@ -54,9 +59,9 @@ class _TripListItem extends StatelessWidget {
   final String status;
   final String trailing;
   final String description;
-  final Color statusColor;
-  final Color statusBackground;
-  final bool muted;
+  final Color statusColor = const Color(0xFF8A9895);
+  final Color statusBackground = const Color(0xFFF0F5F4);
+  final bool muted = false;
 
   @override
   Widget build(BuildContext context) {

@@ -7,10 +7,12 @@ class HomeSectionHeader extends StatelessWidget {
     super.key,
     required this.title,
     required this.action,
+    this.onAction,
   });
 
   final String title;
   final String action;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -27,12 +29,18 @@ class HomeSectionHeader extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          Text(
-            action,
-            style: TextStyle(
-              color: const Color(0xFF148776),
-              fontSize: context.rs(11),
-              fontWeight: FontWeight.w400,
+          InkWell(
+            onTap: onAction,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                action,
+                style: TextStyle(
+                  color: const Color(0xFF148776),
+                  fontSize: context.rs(11),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
             ),
           ),
         ],
