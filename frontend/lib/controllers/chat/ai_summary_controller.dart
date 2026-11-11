@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../services/schedule_service.dart';
 import '../../models/trip_schedule.dart';
+import '../../models/settlement.dart';
+import '../../services/settlement_service.dart';
 import '../../widgets/calendar/presentation/calendar_view_data.dart';
 
 class AiSummarySaveResult {
@@ -26,9 +28,18 @@ class AiSummaryController extends ChangeNotifier {
     Future<void> Function(CalendarScheduleDraft draft)? scheduleCreator,
     Future<bool> Function(CalendarScheduleDraft draft)? scheduleImporter,
     Future<List<TripSchedule>> Function()? scheduleLoader,
+    Future<SettlementData> Function()? settlementLoader,
+    Future<void> Function(ExpenseDraft draft)? expenseCreator,
   }) : items = List.unmodifiable(
          items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)),
        ),
+       _settlementLoader =
+           settlementLoader ??
+           (() => SettlementService.fetchDetail(accessToken, tripId)),
+       _expenseCreator =
+           expenseCreator ??
+           ((draft) =>
+               SettlementService.saveExpense(accessToken, tripId, draft)),
        _scheduleLoader =
            scheduleLoader ??
            (() => ScheduleService.fetchTripSchedules(
@@ -66,6 +77,51 @@ class AiSummaryController extends ChangeNotifier {
   final List<Map<String, dynamic>> items;
   final Future<bool> Function(CalendarScheduleDraft draft) _scheduleCreator;
   final Future<List<TripSchedule>> Function() _scheduleLoader;
+  final Future<SettlementData> Function() _settlementLoader;
+  final Future<void> Function(ExpenseDraft draft) _expenseCreator;
+  final _expenses = <int, ExpenseDraft>{};
+  final _savedExpenses = <int>{};
+  final _existingExpenses = <int>{};
+  int get savedExpenseCount => _savedExpenses.length;
+  int get existingExpenseCount => _existingExpenses.length;
+  int get pendingExpenseCount =>
+      _expenses.keys.where((i) => !isExpenseExisting(i)).length;
+  bool isExpenseCandidate(int index) =>
+      items[index]['type'] == 'SETTLEMENT' ||
+      (items[index]['type'] == 'RESERVATION' && items[index]['amount'] != null);
+  bool get hasExpenses =>
+      List.generate(items.length, (i) => i).any(isExpenseCandidate);
+  bool isExpenseExisting(int index) =>
+      _savedExpenses.contains(index) || _existingExpenses.contains(index);
+  ExpenseDraft? expenseDraft(int index) => _expenses[index];
+  Future<SettlementData> loadSettlement() => _settlementLoader();
+
+  void confirmExpense(int index, ExpenseDraft draft) {
+    if (_disposed ||
+        _isSaving ||
+        !isExpenseCandidate(index) ||
+        isExpenseExisting(index)) {
+      return;
+    }
+    _expenses[index] = draft;
+    notifyListeners();
+  }
+
+  void removeExpense(int index) {
+    if (_disposed || _isSaving || isExpenseExisting(index)) return;
+    _expenses.remove(index);
+    notifyListeners();
+  }
+
+  static bool _sameExpense(ExpenseDraft a, ExpenseDraft b) =>
+      _normalized(a.title) == _normalized(b.title) &&
+      a.amount == b.amount &&
+      a.payerId == b.payerId &&
+      a.date.year == b.date.year &&
+      a.date.month == b.date.month &&
+      a.date.day == b.date.day &&
+      _normalized(a.placeName) == _normalized(b.placeName) &&
+      setEquals(a.participantIds.toSet(), b.participantIds.toSet());
   final _existingIndices = <int>{};
   final _suspectedIndices = <int>{};
   final _selectedIndices = <int>{};
@@ -151,8 +207,8 @@ class AiSummaryController extends ChangeNotifier {
 
   bool get isSaving => _isSaving;
   int get eligibleCount => _drafts.length;
-  int get savedCount => _savedIndices.length;
-  int get pendingCount => _selectedIndices.length;
+  int get savedCount => _savedIndices.length + savedExpenseCount;
+  int get pendingCount => _selectedIndices.length + pendingExpenseCount;
   int get skippedCount => items.where(_isCalendarItem).length - eligibleCount;
   AiSummarySaveResult? get lastResult => _lastResult;
 
@@ -188,9 +244,40 @@ class AiSummaryController extends ChangeNotifier {
           break;
         }
       }
+      if (error == null && pendingExpenseCount > 0 && !_disposed) {
+        try {
+          // Recheck before each batch, including retries after a lost response.
+          final data = await _settlementLoader();
+          final known = data.expenses
+              .map(
+                (e) => ExpenseDraft(
+                  title: e.title,
+                  amount: e.amount,
+                  payerId: e.payerId,
+                  date: e.date,
+                  participantIds: e.participantIds,
+                  placeName: e.placeName,
+                ),
+              )
+              .toList();
+          for (final entry in _expenses.entries) {
+            if (_disposed) break;
+            if (isExpenseExisting(entry.key)) continue;
+            if (known.any((e) => _sameExpense(e, entry.value))) {
+              _existingExpenses.add(entry.key);
+              continue;
+            }
+            await _expenseCreator(entry.value);
+            _savedExpenses.add(entry.key);
+            known.add(entry.value);
+          }
+        } catch (e) {
+          error = e;
+        }
+      }
       final result = AiSummarySaveResult(
         savedCount: savedCount,
-        existingCount: existingCount,
+        existingCount: existingCount + existingExpenseCount,
         remainingCount: pendingCount,
         error: error,
       );

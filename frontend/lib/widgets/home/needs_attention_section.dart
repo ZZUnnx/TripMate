@@ -1,37 +1,51 @@
 import 'package:flutter/material.dart';
 
+import '../../models/home_data.dart';
+import '../../models/settlement.dart';
 import '../common/responsive.dart';
 import 'home_section_header.dart';
 
 class NeedsAttentionSection extends StatelessWidget {
-  const NeedsAttentionSection({super.key});
-
+  const NeedsAttentionSection({
+    super.key,
+    required this.data,
+    this.onSettlementTap,
+  });
+  final HomeData data;
+  final ValueChanged<SettlementData>? onSettlementTap;
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: const [
-        HomeSectionHeader(title: '확인 필요', action: '3건'),
-        _AttentionItem(
-          icon: Icons.route_outlined,
-          title: '일정 검토 요청',
-          meta: '오늘',
-          description: '봄바람 따라, 제주 · 2건의 일정 시간이 변경됨',
+  Widget build(BuildContext context) => Column(
+    children: [
+      HomeSectionHeader(
+        title: '확인 필요',
+        action: data.needsAttention == null
+            ? '조회 실패'
+            : '${data.needsAttention!.length}건',
+      ),
+      if (data.needsAttention == null || data.needsAttention!.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            data.needsAttention == null
+                ? '정산 정보를 불러오지 못했어요.'
+                : '확인할 미완료 정산이 없습니다.',
+          ),
         ),
-        _AttentionItem(
-          icon: Icons.account_balance_wallet_outlined,
-          title: '미완료 정산 요청',
-          meta: '2건',
-          description: '오사카 겨울 여행 · 정산 요청이 2일째 미완료',
+      for (final settlement in data.needsAttention ?? <SettlementData>[])
+        InkWell(
+          onTap: onSettlementTap == null
+              ? null
+              : () => onSettlementTap!(settlement),
+          child: _AttentionItem(
+            icon: Icons.account_balance_wallet_outlined,
+            title: '미완료 정산',
+            meta: '${settlement.expenseCount}건',
+            description:
+                '${settlement.title} · 총 ${settlementWon(settlement.totalAmount)}',
+          ),
         ),
-        _AttentionItem(
-          icon: Icons.calendar_month_outlined,
-          title: '예약 마감 또는 변경',
-          meta: '1건',
-          description: '강릉 당일치기 · 예약 변경 알림이 도착했어요',
-        ),
-      ],
-    );
-  }
+    ],
+  );
 }
 
 class _AttentionItem extends StatelessWidget {

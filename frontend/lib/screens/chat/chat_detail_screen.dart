@@ -168,13 +168,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           enableDrag: false,
           barrierColor: const Color(0xFF152523).withValues(alpha: 0.4),
           backgroundColor: Colors.transparent,
-          builder: (context) => AiSummarySheet(controller: summaryController),
+          builder: (context) => AiSummarySheet(
+            controller: summaryController,
+            currentUserId: widget.currentUserId,
+          ),
         );
         if (!mounted || savedCount == null) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '새 일정 $savedCount개 추가 · 기존 일정 ${summaryController.existingCount}개 제외',
+              '일정 ${savedCount - summaryController.savedExpenseCount}개 · '
+              '지출 ${summaryController.savedExpenseCount}개 저장 · '
+              '기존 항목 ${summaryController.existingCount + summaryController.existingExpenseCount}개 제외',
             ),
           ),
         );

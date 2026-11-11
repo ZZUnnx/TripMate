@@ -1,31 +1,45 @@
 import 'package:flutter/material.dart';
 
 import '../common/responsive.dart';
+import '../../models/home_data.dart';
+import '../../models/settlement.dart';
 
 class QuickStatsSection extends StatelessWidget {
-  const QuickStatsSection({super.key});
+  const QuickStatsSection({super.key, required this.data});
+
+  final HomeData data;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: context.insetsFromLTRB(18, 14, 18, 0),
       child: Row(
-        children: const [
+        children: [
           Expanded(
             child: _QuickStatCard(
               icon: Icons.route_outlined,
               label: '다음 일정',
-              value: '4/18 08:20',
-              detail: '김포공항 집결 · 봄바람 따라 제주',
+              value: data.schedules == null
+                  ? '조회 실패'
+                  : data.nextSchedule == null
+                  ? '예정 없음'
+                  : '${data.nextSchedule!.scheduledDate.month}/${data.nextSchedule!.scheduledDate.day} ${data.nextSchedule!.scheduledTime?.substring(0, 5) ?? '시간 미정'}',
+              detail: data.nextSchedule == null
+                  ? '캘린더에서 일정을 추가해 보세요'
+                  : '${data.nextSchedule!.title} · ${data.nextSchedule!.tripTitle}',
             ),
           ),
-          ResponsiveGap(width: 10),
+          const ResponsiveGap(width: 10),
           Expanded(
             child: _QuickStatCard(
               icon: Icons.account_balance_wallet_outlined,
               label: '전체 정산',
-              value: '₩842,600',
-              detail: '7건 자동 분류 완료',
+              value: data.totalAmount == null
+                  ? '조회 실패'
+                  : settlementWon(data.totalAmount!),
+              detail: data.expenseCount == null
+                  ? '정산 정보를 다시 조회해 주세요'
+                  : '전체 여행 지출 ${data.expenseCount}건',
               detailColor: Color(0xFF2F9D69),
             ),
           ),

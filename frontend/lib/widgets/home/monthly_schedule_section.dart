@@ -1,51 +1,64 @@
 import 'package:flutter/material.dart';
 
+import '../../models/home_data.dart';
+import '../../models/trip_schedule.dart';
 import '../common/responsive.dart';
 import 'home_section_header.dart';
 
 class MonthlyScheduleSection extends StatelessWidget {
-  const MonthlyScheduleSection({super.key});
-
+  const MonthlyScheduleSection({
+    super.key,
+    required this.data,
+    this.onScheduleTap,
+    this.onViewCalendar,
+  });
+  final HomeData data;
+  final ValueChanged<TripSchedule>? onScheduleTap;
+  final VoidCallback? onViewCalendar;
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: const [
-        HomeSectionHeader(title: '이번 달 일정', action: '캘린더 보기'),
+  Widget build(BuildContext context) => Column(
+    children: [
+      HomeSectionHeader(
+        title: '이번 달 일정',
+        action: '캘린더 보기',
+        onAction: onViewCalendar,
+      ),
+      if (data.monthlySchedules == null || data.monthlySchedules!.isEmpty)
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 18),
-          child: Column(
-            children: [
-              _ScheduleListItem(
-                month: '4월',
-                day: '18',
-                title: '김포공항 집결',
-                detail: '봄바람 따라, 제주 · 08:20',
-                tag: '제주',
-              ),
-              ResponsiveGap(height: 8),
-              _ScheduleListItem(
-                month: '4월',
-                day: '19',
-                title: '우도 해변 투어',
-                detail: '봄바람 따라, 제주 · 10:00',
-                tag: '제주',
-              ),
-              ResponsiveGap(height: 8),
-              _ScheduleListItem(
-                month: '12월',
-                day: '24',
-                title: '오사카 출발',
-                detail: '오사카 겨울 여행 · 미정',
-                tag: '오사카',
-                blue: true,
-              ),
-              ResponsiveGap(height: 16),
-            ],
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            data.monthlySchedules == null
+                ? '일정을 불러오지 못했어요.'
+                : '이번 달 등록된 일정이 없습니다.',
           ),
         ),
-      ],
-    );
-  }
+      Padding(
+        padding: context.symmetricInsets(horizontal: 18),
+        child: Column(
+          children: [
+            for (final schedule
+                in data.monthlySchedules ?? <TripSchedule>[]) ...[
+              InkWell(
+                onTap: onScheduleTap == null
+                    ? null
+                    : () => onScheduleTap!(schedule),
+                child: _ScheduleListItem(
+                  month: '${schedule.scheduledDate.month}월',
+                  day: '${schedule.scheduledDate.day}',
+                  title: schedule.title,
+                  detail:
+                      '${schedule.tripTitle} · ${schedule.scheduledTime?.substring(0, 5) ?? '시간 미정'}',
+                  tag: schedule.category,
+                ),
+              ),
+              const ResponsiveGap(height: 8),
+            ],
+            const ResponsiveGap(height: 16),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _ScheduleListItem extends StatelessWidget {
@@ -55,7 +68,6 @@ class _ScheduleListItem extends StatelessWidget {
     required this.title,
     required this.detail,
     required this.tag,
-    this.blue = false,
   });
 
   final String month;
@@ -63,7 +75,7 @@ class _ScheduleListItem extends StatelessWidget {
   final String title;
   final String detail;
   final String tag;
-  final bool blue;
+  final bool blue = false;
 
   @override
   Widget build(BuildContext context) {

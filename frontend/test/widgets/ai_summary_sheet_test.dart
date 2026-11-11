@@ -4,9 +4,79 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/controllers/chat/ai_summary_controller.dart';
 import 'package:frontend/models/trip_schedule.dart';
+import 'package:frontend/models/settlement.dart';
 import 'package:frontend/widgets/chat/detail/ai_summary_sheet.dart';
 
+import '../fixtures/settlement_fixture.dart';
+
 void main() {
+  testWidgets('reviews AI amount before saving it to settlement', (
+    tester,
+  ) async {
+    final saved = <ExpenseDraft>[];
+    final controller = AiSummaryController(
+      tripId: 42,
+      accessToken: 'test',
+      items: [
+        {
+          'type': 'SETTLEMENT',
+          'title': '숙소비',
+          'amount': 80000,
+          'date': '2026-10-31',
+          'placeName': '호텔',
+          'peopleCount': 1,
+        },
+      ],
+      scheduleLoader: () async => [],
+      settlementLoader: () async => settlementFixture(tripId: 42, empty: true),
+      expenseCreator: (draft) async => saved.add(draft),
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showModalBottomSheet<int>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) =>
+                    AiSummarySheet(controller: controller, currentUserId: 2),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('확인'));
+    await tester.tap(find.text('확인'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextFormField, '80000'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '숙소비'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '80000'),
+      '90000',
+    );
+    await tester.ensureVisible(find.text('요약에 반영'));
+    await tester.tap(find.text('요약에 반영'));
+    await tester.pumpAndSettle();
+    expect(saved, isEmpty);
+    expect(controller.pendingExpenseCount, 1);
+    await tester.ensureVisible(find.text('선택한 일정·정산 저장'));
+    await tester.tap(find.text('선택한 일정·정산 저장'));
+    await tester.pumpAndSettle();
+    expect(saved.single.title, '숙소비');
+    expect(saved.single.amount, 90000);
+    expect(saved.single.payerId, 2);
+    expect(saved.single.participantIds, [1, 2]);
+    expect(saved.single.date, DateTime(2026, 10, 31));
+    expect(saved.single.placeName, '호텔');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'existing choice is locked and suspected choice needs selection',
     (tester) async {
@@ -143,8 +213,8 @@ void main() {
         home: Scaffold(body: AiSummarySheet(controller: controller)),
       ),
     );
-    await tester.ensureVisible(find.text('공유 일정에 추가'));
-    await tester.tap(find.text('공유 일정에 추가'));
+    await tester.ensureVisible(find.text('선택한 일정·정산 저장'));
+    await tester.tap(find.text('선택한 일정·정산 저장'));
     await tester.pump();
     expect(calls, 0);
     expect(find.textContaining('1개는 제외됩니다'), findsOneWidget);

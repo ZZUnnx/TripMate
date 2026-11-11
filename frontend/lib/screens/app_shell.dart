@@ -30,7 +30,11 @@ class _AppShellState extends State<AppShell> {
     return IndexedStack(
       index: _currentIndex,
       children: [
-        HomeScreen(currentIndex: 0, onNavigationSelected: _selectTab),
+        HomeScreen(
+          currentIndex: 0,
+          onNavigationSelected: _selectTab,
+          isActive: _currentIndex == 0,
+        ),
         ChatScreen(currentIndex: 1, onNavigationSelected: _selectTab),
         CalendarScreen(
           currentIndex: 2,

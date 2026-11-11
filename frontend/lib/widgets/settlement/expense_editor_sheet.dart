@@ -9,21 +9,29 @@ class ExpenseEditorSheet extends StatefulWidget {
     required this.members,
     required this.currentUserId,
     this.expense,
+    this.initialDraft,
+    this.submitLabel = '저장',
   });
   final List<SettlementMember> members;
   final int currentUserId;
   final SettlementExpense? expense;
+  final ExpenseDraft? initialDraft;
+  final String submitLabel;
   @override
   State<ExpenseEditorSheet> createState() => _ExpenseEditorSheetState();
 }
 
 class _ExpenseEditorSheetState extends State<ExpenseEditorSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final _title = TextEditingController(text: widget.expense?.title);
-  late final _amount = TextEditingController(
-    text: widget.expense?.amount.toString(),
+  late final _title = TextEditingController(
+    text: widget.initialDraft?.title ?? widget.expense?.title,
   );
-  late final _place = TextEditingController(text: widget.expense?.placeName);
+  late final _amount = TextEditingController(
+    text: (widget.initialDraft?.amount ?? widget.expense?.amount)?.toString(),
+  );
+  late final _place = TextEditingController(
+    text: widget.initialDraft?.placeName ?? widget.expense?.placeName,
+  );
   late int _payer;
   late DateTime _date;
   late Set<int> _participants;
@@ -31,13 +39,15 @@ class _ExpenseEditorSheetState extends State<ExpenseEditorSheet> {
   void initState() {
     super.initState();
     _payer =
+        widget.initialDraft?.payerId ??
         widget.expense?.payerId ??
         (widget.members.any((m) => m.userId == widget.currentUserId)
             ? widget.currentUserId
             : widget.members.first.userId);
-    _date = widget.expense?.date ?? DateTime.now();
+    _date = widget.initialDraft?.date ?? widget.expense?.date ?? DateTime.now();
     _participants =
-        (widget.expense?.participantIds ??
+        (widget.initialDraft?.participantIds ??
+                widget.expense?.participantIds ??
                 widget.members.map((m) => m.userId).toList())
             .toSet();
   }
@@ -184,7 +194,7 @@ class _ExpenseEditorSheetState extends State<ExpenseEditorSheet> {
                     backgroundColor: const Color(0xFF148776),
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('저장'),
+                  child: Text(widget.submitLabel),
                 ),
               ),
             ],
