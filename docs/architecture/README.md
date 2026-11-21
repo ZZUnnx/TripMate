@@ -44,16 +44,16 @@ AI 분석: 서버 → 여행 채팅 조회 → Gemini → 분석 JSON → 앱 �
 | --- | --- | --- |
 | 일반 REST | `https://api.dwsdd.com` | [AuthService](../../frontend/lib/services/auth_service.dart) |
 | STOMP | `wss://api.dwsdd.com/ws/chat` | [ChatSocketService](../../frontend/lib/services/chat_socket_service.dart) |
-| AI 분석 | `http://100.79.181.89:8080` | [AiService](../../frontend/lib/services/ai_service.dart) |
+| AI 분석 | `https://api.dwsdd.com` | [AiService](../../frontend/lib/services/ai_service.dart), `AuthService.baseUrl` 공유 |
 
-주소는 코드 상수입니다. 환경별 주소를 `--dart-define`으로 전환하는 구성은 없습니다. 로컬 서버를 켠 것만으로 앱이 그 서버를 사용하지 않습니다. 일반 서버와 AI 서버가 같은 DB·배포 버전을 사용하는지도 미확인입니다.
+주소는 코드 상수입니다. 환경별 주소를 `--dart-define`으로 전환하는 구성은 없습니다. 로컬 서버를 켠 것만으로 앱이 그 서버를 사용하지 않습니다. 일반 REST와 AI는 `AuthService.baseUrl`을 공유합니다. 운영 배포 버전과 실제 DB는 미확인입니다.
 
 ## 서버·인증·저장
 
 - Java 21 / Spring Boot 4.1.1. [실행 준비](../../backend/README.md)에 DB·JWT·Gemini 환경변수가 정리되어 있습니다.
 - 여행·멤버·채팅 REST·일정·정산 Controller가 JWT를 검증하고 Service가 여행 접근 권한을 확인합니다.
 - STOMP CONNECT는 JWT, 여행방 SUBSCRIBE는 접근 권한을 검사합니다. 메시지는 DB에 저장한 후 해당 여행 topic으로 전달합니다.
-- AI 분석·테스트에는 현재 인증·여행 접근 검사가 없습니다.
+- AI 분석·테스트는 JWT 인증과 여행 소유자·참여자 권한 검사를 거친 후 Gemini를 호출합니다. 테스트에도 `tripId`가 필수입니다.
 - JPA `ddl-auto=update`로 서버 기동 시 DB 스키마 갱신을 시도합니다. 실제 운영 스키마와 소스의 일치는 확인하지 않았습니다.
 - 일정 import는 여행 행 잠금 아래 중복을 비교합니다. 지출의 중복 확인은 앱 조회·비교이며 서버의 동시 중복 방지 기능과 다릅니다.
 - 여러 일정·지출 저장은 별도 요청입니다. 전체를 한 번에 취소·확정하는 트랜잭션이 아니며 일부 성공 후 재시도할 수 있습니다.

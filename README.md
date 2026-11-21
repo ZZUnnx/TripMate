@@ -45,7 +45,7 @@ cd backend
 .\gradlew.bat bootRun
 ```
 
-Linux/macOS에서는 `./gradlew bootRun`을 사용합니다. 앱의 일반 API 주소는 `https://api.dwsdd.com`, AI 분석 주소는 `http://100.79.181.89:8080`으로 각각 고정되어 있습니다. 로컬 서버 실행만으로 앱 연결 대상이 바뀌지는 않습니다.
+Linux/macOS에서는 `./gradlew bootRun`을 사용합니다. 앱의 일반 API와 AI 분석은 `AuthService.baseUrl`의 `https://api.dwsdd.com`을 함께 사용합니다. 로컬 서버 실행만으로 앱 연결 대상이 바뀌지는 않습니다.
 
 ## 최근 검증
 

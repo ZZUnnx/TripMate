@@ -44,8 +44,8 @@ Controller는 요청을 받고, Service는 권한·업무 규칙을 처리하며
 - 여행 기능은 소유자 또는 참여자 접근 여부를 검사합니다. 멤버 추가는 접근 가능한 여행의 참여 사용자도 요청할 수 있는 현재 구현입니다.
 - STOMP는 CONNECT에서 JWT, 여행방 SUBSCRIBE에서 접근 권한을 검사합니다. 메시지 저장 시에도 여행 접근 권한을 확인합니다.
 - `jwt.expiration=86400000`: 현재 기본 토큰 만료는 24시간입니다. 원래 요구사항의 1시간과 다릅니다.
-- AI 분석 `/api/trips/{tripId}/ai/analyze`와 `/api/ai/test`에는 현재 인증·여행 접근 검사가 없습니다. AI 분석 인증은 다른 API와 동일하게 적용된 상태가 아닙니다.
-- 중복 이메일·로그인 불일치는 `IllegalArgumentException`을 던지며 이를 업무 오류 상태로 통일하는 전역 예외 처리 코드는 없습니다.
+- AI 분석 `/api/trips/{tripId}/ai/analyze`와 `/api/ai/test`는 `AuthUserIdResolver`로 JWT를 검증하고 여행 소유자·참여자 접근을 확인합니다. 테스트 API도 `tripId` 쿼리 파라미터가 필수입니다. 토큰 누락·무효는 401, 접근 불가 여행은 다른 여행 API와 동일하게 404를 반환합니다.
+- `GlobalExceptionHandler`(`@RestControllerAdvice`)가 중복 이메일·로그인 불일치 등의 `IllegalArgumentException`을 400, `SecurityException`을 403으로 변환합니다. 입력 검증·요청 파싱 오류와 기존 `ResponseStatusException`도 `{status, error, message, path}` JSON으로 반환하며 기존 401·404 상태는 유지합니다.
 
 ## 주요 동작
 

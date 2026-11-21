@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class AiService {
-  static const String baseUrl = 'http://100.79.181.89:8080';
-
-  static Future<List<dynamic>> analyzeChat(int tripId) async {
+  static Future<List<dynamic>> analyzeChat({
+    required int tripId,
+    required String accessToken,
+  }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/trips/$tripId/ai/analyze'),
+      Uri.parse('${AuthService.baseUrl}/api/trips/$tripId/ai/analyze'),
       headers: {
+        'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',
       },
     );

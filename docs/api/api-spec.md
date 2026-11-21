@@ -6,11 +6,12 @@
 
 - REST 경로 접두사: `/api`, JSON 요청·응답. 회원가입 응답은 문자열입니다.
 - Flutter 일반 API: `https://api.dwsdd.com` (`frontend/lib/services/auth_service.dart`).
-- Flutter AI 분석: `http://100.79.181.89:8080` (`frontend/lib/services/ai_service.dart`).
+- Flutter AI 분석: 공통 `AuthService.baseUrl`의 `https://api.dwsdd.com` (`frontend/lib/services/ai_service.dart`).
 - 인증 대상은 `Authorization: Bearer <accessToken>`을 전달합니다. Controller의 `AuthUserIdResolver`가 JWT를 검증합니다.
 - 여행·멤버·채팅·일정·정산은 소유자 또는 여행 참여자 접근을 검사합니다.
-- AI 분석·테스트 API에는 현재 인증 및 여행 접근 검사가 없습니다. 보호된 API로 표기하지 않습니다.
-- 오류는 입력 검증 400, 토큰 누락·무효 401, 리소스 없음·여행 접근 불가 404 등이 사용됩니다. 회원가입·로그인의 업무 예외 등은 전역 변환 처리가 없어 500으로 응답할 수 있습니다. 통일된 업무 오류 본문 계약은 없습니다.
+- AI 분석·테스트도 JWT 인증 및 여행 소유자·참여자 접근 검사를 수행합니다. 테스트 API는 `tripId` 쿼리 파라미터가 필수입니다.
+- 전역 예외 핸들러는 중복 이메일·로그인 불일치 등의 `IllegalArgumentException`과 잘못된 입력을 400, `SecurityException`을 403으로 반환합니다. 기존 `ResponseStatusException`의 상태(토큰 누락·무효 401, 리소스 없음·여행 접근 불가 404 등)는 유지합니다.
+- 위 오류는 `{status, error, message, path}` JSON으로 반환합니다. 예: `{"status":400,"error":"Bad Request","message":"이미 사용 중인 이메일입니다.","path":"/api/auth/signup"}`.
 
 ## 구현된 REST API
 
@@ -38,8 +39,8 @@
 | 지출 수정 | PATCH | `/api/expenses/{expenseId}` | 필요 | 204 |
 | 지출 삭제 | DELETE | `/api/expenses/{expenseId}` | 필요 | 204 |
 | 정산 완료 상태 변경 | PATCH | `/api/trips/{tripId}/settlement` | 필요 | 204 |
-| AI 채팅 분석 | POST | `/api/trips/{tripId}/ai/analyze` | 없음 | 200, `{items: [...]}` |
-| Gemini 테스트 | GET | `/api/ai/test?message=...` | 없음 | 200, 응답 문자열 |
+| AI 채팅 분석 | POST | `/api/trips/{tripId}/ai/analyze` | 필요 | 200, `{items: [...]}` |
+| Gemini 테스트 | GET | `/api/ai/test?tripId=...&message=...` | 필요 | 200, 응답 문자열 |
 
 ## 인증
 
