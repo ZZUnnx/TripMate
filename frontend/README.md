@@ -16,7 +16,7 @@ flutter run -d chrome
 
 점검 환경에서 Windows·Chrome·Edge가 실행 대상으로 인식되었습니다. 실제 앱 실행·Android/iOS 배포 검증은 이번에 수행하지 않았습니다.
 
-일반 API는 [AuthService](lib/services/auth_service.dart)의 `https://api.dwsdd.com`, AI 분석은 [AiService](lib/services/ai_service.dart)의 `http://100.79.181.89:8080`을 사용합니다. STOMP 주소는 일반 API에서 `wss://api.dwsdd.com/ws/chat`로 만듭니다. 주소가 코드에 고정되어 있어 로컬 백엔드 실행만으로 전환되지 않으며 두 서버의 DB·배포 일치는 미확인입니다.
+일반 API와 [AI 분석](lib/services/ai_service.dart)은 [AuthService](lib/services/auth_service.dart)의 `https://api.dwsdd.com`을 함께 사용하며 AI 요청에도 Bearer JWT를 전달합니다. STOMP 주소는 일반 API에서 `wss://api.dwsdd.com/ws/chat`로 만듭니다. 주소가 코드에 고정되어 있어 로컬 백엔드 실행만으로 전환되지 않으며 운영 배포 버전과 실제 DB는 미확인입니다.
 
 ## 파일 구조
 

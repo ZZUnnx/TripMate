@@ -38,7 +38,7 @@
 | 공유 일정 조회·추가·삭제 | 구현 완료 | 캘린더·여행 타임라인, 수동 추가, 스와이프 삭제 | [CalendarScreen](../../frontend/lib/screens/calendar/calendar_screen.dart), [일정 API](../../backend/src/main/java/com/tripmate/backend/schedule/ScheduleController.java) |
 | 일정 수정·상세에서 추가 | 일부 구현 | 수정 API·앱 서비스 있음. 수정 화면 없음. 상세 추가 버튼은 준비 중 | [상세 화면](../../frontend/lib/screens/calendar/trip_calendar_detail_screen.dart), [앱 서비스](../../frontend/lib/services/schedule_service.dart) |
 | 개인 일정 | 미구현 | 범례만 있으며 개인 일정 전용 모델·API·저장 흐름 없음 | [범례](../../frontend/lib/widgets/calendar/calendar_legend.dart) |
-| AI 채팅 분석 | 일부 구현 | Gemini 호출·JSON 결과 처리 있음. 일반 API와 주소가 다르고 분석 인증·여행 접근 검사가 없음 | [앱 AI](../../frontend/lib/services/ai_service.dart), [서버 AI](../../backend/src/main/java/com/tripmate/backend/ai/AiChatAnalysisController.java) |
+| AI 채팅 분석 | 일부 구현 | Gemini 호출·JSON 결과 처리, JWT·여행 접근 검사, 일반 API와 HTTPS 주소 공유. 운영 통합 검증 미완료 | [앱 AI](../../frontend/lib/services/ai_service.dart), [서버 AI](../../backend/src/main/java/com/tripmate/backend/ai/AiChatAnalysisController.java) |
 | AI 결과 확인 후 일정·지출 저장 | 구현 완료 | 일정 선택·중복 확인 import, 지출 확인·저장·재시도. 예약 종료일은 메모 | [AiSummaryController](../../frontend/lib/controllers/chat/ai_summary_controller.dart) |
 | 영구 후보 보관·승인 이력 | 일부 구현 | 후보 Entity만 있음. 후보 조회·승인 API·Repository 없음. 현재 결과에서 확정 일정으로 직접 저장 | [ScheduleCandidate](../../backend/src/main/java/com/tripmate/backend/schedule/ScheduleCandidate.java), [API 현황](../api/api-spec.md) |
 | 지출·정산 | 구현 완료 | 지출 CRUD, 균등 분담·송금 계획, 완료 표시, CSV 클립보드 복사 | [정산 화면](../../frontend/lib/screens/settlement/settlement_screen.dart), [정산 Service](../../backend/src/main/java/com/tripmate/backend/settlement/SettlementService.java) |
@@ -54,9 +54,9 @@
 
 ## 확인된 제한·불일치
 
-- 로그인 실패 시 `login_screen.dart`가 `isLoading`을 false로 돌리지 않아 재시도가 비활성화될 가능성이 있습니다. 코드상 확인 사항이며 실패 시나리오 실기기 재현은 하지 않았습니다.
-- 일반 API와 AI가 같은 DB·배포 버전을 사용하는지는 확인하지 않았습니다. 요약 생성과 저장의 연결 대상이 자동으로 일치한다고 가정할 수 없습니다.
-- AI 분석에는 인증 검사가 없고 전체 채팅을 외부 API로 전달합니다.
+- 로그인 화면은 요청 완료 시 `finally`에서 로딩을 해제해 실패 후 재시도할 수 있습니다. 화면이 해제된 경우에는 상태를 갱신하지 않습니다. 실패 시나리오 실기기 재현은 하지 않았습니다.
+- 일반 API와 AI 분석은 같은 HTTPS 주소를 사용합니다. 운영 배포 버전과 실제 DB는 확인하지 않았습니다.
+- AI 분석은 JWT·여행 접근 검사 후 전체 채팅을 외부 API로 전달합니다.
 - 일정·지출 저장은 개별 요청입니다. 일부만 성공할 수 있으며 앱은 남은 항목 재시도를 지원합니다. 지출의 서버 동시 중복 방지는 구현되어 있지 않습니다.
 - 홈 ‘확인 필요’는 지출이 있고 완료되지 않은 정산 목록입니다. 푸시 알림이나 변경 알림 이력을 뜻하지 않습니다.
 

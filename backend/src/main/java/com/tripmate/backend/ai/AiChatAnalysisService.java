@@ -13,17 +13,21 @@ public class AiChatAnalysisService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final GeminiService geminiService;
+    private final AiTripAccess aiTripAccess;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AiChatAnalysisService(
             ChatMessageRepository chatMessageRepository,
-            GeminiService geminiService
+            GeminiService geminiService,
+            AiTripAccess aiTripAccess
     ) {
         this.chatMessageRepository = chatMessageRepository;
         this.geminiService = geminiService;
+        this.aiTripAccess = aiTripAccess;
     }
 
-    public AiAnalyzeResponse analyze(Long tripId) {
+    public AiAnalyzeResponse analyze(Long tripId, Long userId) {
+        aiTripAccess.requireAccess(tripId, userId);
 
         List<ChatMessage> messages =
                 chatMessageRepository

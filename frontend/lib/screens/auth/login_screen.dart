@@ -70,7 +70,13 @@ class _LoginScreenState extends State<LoginScreen> {
           content: Text('로그인 실패: $e'),
         ),
       );
-    } 
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override

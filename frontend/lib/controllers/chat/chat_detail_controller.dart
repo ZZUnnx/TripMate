@@ -123,7 +123,10 @@ class ChatDetailController extends ChangeNotifier {
     );
   }
 
-  Future<List<dynamic>> analyzeChat() => AiService.analyzeChat(tripId);
+  Future<List<dynamic>> analyzeChat() => AiService.analyzeChat(
+    tripId: tripId,
+    accessToken: accessToken,
+  );
 
   Future<void> inviteMember(String email) async {
     await ChatService.inviteMember(
