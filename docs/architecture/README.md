@@ -1,185 +1,75 @@
-# Architecture
+# TripMate 아키텍처와 실행 구성
 
-TripMate는 Flutter 클라이언트, Spring Boot 백엔드, MySQL 데이터베이스, 외부 AI API를 사용하는 구조로 구성한다.
+기준일: **2026-11-11**. 현재 저장소 소스 기준입니다. 과거 문서에 기록된 원격 서버 구성과 이번에 확인한 사실을 구분합니다.
 
-```text
-Flutter
-  -> REST / WebSocket
-Spring Boot
-  -> MySQL
-  -> AI API
-  -> Map API
-```
-
-## 서버 상태
-
-### 서버 환경
-
-- OS: Ubuntu Server
-- 프로젝트 경로: `/srv/tripmate/app`
-- 원격 접속: SSH
-- 내부 접속: Tailscale
-- 컨테이너 관리: Docker / Docker Compose
-
-### 프로젝트 구조
+## 전체 흐름
 
 ```text
-/srv/tripmate/app
-├── backend/
-│   ├── build.gradle
-│   ├── gradlew
-│   ├── gradle/
-│   ├── settings.gradle
-│   └── src/
-│
-├── database/
-├── docs/
-├── frontend/
-├── .env
-├── docker-compose.yml
-└── README.md
+Flutter 앱
+  screens / widgets: 화면과 입력
+  controllers / providers: 조회·저장·상태·로그인 관리
+  services: REST / WebSocket 통신
+      ↓
+Spring Boot 서버
+  Controller: 요청 수신·토큰 확인
+  Service: 여행 권한·업무 규칙·계산
+  Repository / Entity: DB 접근과 매핑
+      ↓
+MySQL
+
+AI 분석: 서버 → 여행 채팅 조회 → Gemini → 분석 JSON → 앱 검토
+저장: 앱에서 선택·확인 → 일정 import / 지출 생성 API → MySQL
 ```
 
-## MySQL
+지도 API 연결은 현재 코드에 없습니다. UI의 지도 안내를 외부 지도 서비스 연동으로 해석하지 않습니다.
 
-MySQL은 Docker 컨테이너로 실행하도록 구성되어 있다.
+## 앱 계층
 
-- Docker Image: `mysql:8.4.11`
-- Container Name: `tripmate-mysql`
-- Container Port: `3306`
-- Host Binding: `127.0.0.1:3306`
-- 데이터 저장: Docker Volume `mysql_data`
-- DB 계정 및 비밀번호: `.env` 파일에서 관리
+진입점은 [main.dart](../../frontend/lib/main.dart), 네 개 탭 전환은 [app_shell.dart](../../frontend/lib/screens/app_shell.dart)입니다. 세부 파일 구조는 [프론트 README](../../frontend/README.md)에 있습니다.
 
-현재 `docker-compose.yml` 구성:
+| 계층 | 책임 |
+| --- | --- |
+| `screens/` | 화면 조립·이동·컨트롤러 연결 |
+| `widgets/` | 입력창·목록·카드 등 UI 부품 |
+| `controllers/` | API 조회·저장, 로딩·실패·선택 상태 |
+| `providers/auth_provider.dart` | 사용자 정보·토큰을 메모리와 SharedPreferences에 보관 |
+| `services/` | HTTP JSON·STOMP 요청과 응답 처리 |
+| `models/` | 여행·채팅·일정·정산 데이터 형식과 홈 집계 |
 
-```yaml
-services:
-  db:
-    image: mysql:8.4.11
-    container_name: tripmate-mysql
-    restart: unless-stopped
+홈은 별도 홈 API 없이 여행 목록·여행별 일정·정산 목록을 조합합니다. 캘린더는 여행별 일정을 합칩니다. 정산 화면은 서버 집계·송금 계획을 사용합니다. 홈·캘린더·정산 탭 재진입 시 최신 데이터를 조회하며 홈은 아래로 당기기와 상세 복귀 시에도 갱신합니다.
 
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+## 연결 대상
 
-    ports:
-      - "127.0.0.1:3306:3306"
+| 용도 | 현재 앱 설정 | 근거 |
+| --- | --- | --- |
+| 일반 REST | `https://api.dwsdd.com` | [AuthService](../../frontend/lib/services/auth_service.dart) |
+| STOMP | `wss://api.dwsdd.com/ws/chat` | [ChatSocketService](../../frontend/lib/services/chat_socket_service.dart) |
+| AI 분석 | `http://100.79.181.89:8080` | [AiService](../../frontend/lib/services/ai_service.dart) |
 
-    volumes:
-      - mysql_data:/var/lib/mysql
+주소는 코드 상수입니다. 환경별 주소를 `--dart-define`으로 전환하는 구성은 없습니다. 로컬 서버를 켠 것만으로 앱이 그 서버를 사용하지 않습니다. 일반 서버와 AI 서버가 같은 DB·배포 버전을 사용하는지도 미확인입니다.
 
-volumes:
-  mysql_data:
-```
+## 서버·인증·저장
 
-MySQL이 `127.0.0.1`에만 바인딩되어 있기 때문에 외부에서 DB 포트에 직접 접근할 수 없도록 설정되어 있다.
+- Java 21 / Spring Boot 4.1.1. [실행 준비](../../backend/README.md)에 DB·JWT·Gemini 환경변수가 정리되어 있습니다.
+- 여행·멤버·채팅 REST·일정·정산 Controller가 JWT를 검증하고 Service가 여행 접근 권한을 확인합니다.
+- STOMP CONNECT는 JWT, 여행방 SUBSCRIBE는 접근 권한을 검사합니다. 메시지는 DB에 저장한 후 해당 여행 topic으로 전달합니다.
+- AI 분석·테스트에는 현재 인증·여행 접근 검사가 없습니다.
+- JPA `ddl-auto=update`로 서버 기동 시 DB 스키마 갱신을 시도합니다. 실제 운영 스키마와 소스의 일치는 확인하지 않았습니다.
+- 일정 import는 여행 행 잠금 아래 중복을 비교합니다. 지출의 중복 확인은 앱 조회·비교이며 서버의 동시 중복 방지 기능과 다릅니다.
+- 여러 일정·지출 저장은 별도 요청입니다. 전체를 한 번에 취소·확정하는 트랜잭션이 아니며 일부 성공 후 재시도할 수 있습니다.
 
-개발 PC에서 MySQL Workbench 등을 이용할 경우 SSH 터널을 사용하여 접속한다.
+## DB 구성
 
-```bash
-ssh -L 3307:127.0.0.1:3306 dwsdd02@100.79.181.89
-```
+여행방은 `trips` 자체를 사용하며 별도 `chat_rooms` Entity는 없습니다. 소유자는 `trips.owner_id`, 추가 멤버는 `trip_members`로 관리합니다. 채팅·일정·지출은 여행 ID에 연결됩니다.
 
-이후 DB 클라이언트에서는 다음과 같이 접속한다.
+`schema.sql`, `seed.sql`은 주석 초안이고 정산 추가 SQL만 실행 가능한 형태입니다. 현재 모델과 적용 범위는 [DB 구조](../database/README.md), [SQL 안내](../../database/README.md)를 참고하세요.
 
-```text
-Host: 127.0.0.1
-Port: 3307
-```
+## 원격 서버에 관한 과거 기록
 
-## Spring Boot Backend
+이전 문서에는 Ubuntu 서버, `/srv/tripmate/app`, SSH·Tailscale, Docker Compose의 MySQL 8.4.11 및 `127.0.0.1:3306` 바인딩이 기록되어 있었습니다. **이번 점검에서는 이 구성을 원격에서 확인하지 않았습니다.** 현재 저장소에는 Dockerfile·Compose 배포 파일이 없으므로 위 기록을 재현 가능한 배포 명세나 현재 실행 상태로 간주하지 않습니다.
 
-Backend는 Gradle 기반 Spring Boot 프로젝트로 구성되어 있다.
+## 확인한 실행 결과와 한계
 
-```text
-backend/
-├── build.gradle
-├── gradlew
-├── gradlew.bat
-├── gradle/
-├── settings.gradle
-└── src/
-```
+2026-11-11 기준 Flutter 전체 정적 분석 문제 없음, 프론트 테스트 58개·백엔드 DB 독립 단위 테스트 13개가 통과했습니다. 인증 없는 운영 주소 여행·정산 GET은 각각 401을 반환했습니다.
 
-현재 Spring Boot 프로젝트는 서버에 업로드되어 있으며, Docker 컨테이너 배포 작업을 진행할 예정이다.
-
-예정 구성:
-
-```text
-Ubuntu Server
-│
-└── Docker Compose
-    ├── tripmate-mysql
-    │   └── MySQL :3306
-    │
-    └── tripmate-backend
-        └── Spring Boot :8080
-```
-
-Spring Boot에서는 Docker Compose 내부의 MySQL 서비스 이름인 `db`를 이용해 DB에 연결한다.
-
-예정 DB 연결 주소:
-
-```text
-jdbc:mysql://db:3306/${MYSQL_DATABASE}
-```
-
-## 주요 명령어
-
-프로젝트 이동:
-
-```bash
-cd /srv/tripmate/app
-```
-
-최신 코드 가져오기:
-
-```bash
-git pull
-```
-
-컨테이너 상태 확인:
-
-```bash
-docker compose ps
-```
-
-컨테이너 실행:
-
-```bash
-docker compose up -d
-```
-
-컨테이너 종료:
-
-```bash
-docker compose down
-```
-
-MySQL 로그 확인:
-
-```bash
-docker compose logs -f db
-```
-
-## 현재 진행 상황
-
-```text
-[완료] Ubuntu 서버 구축
-[완료] SSH 접속
-[완료] Tailscale 연결
-[완료] GitHub 프로젝트 서버 Clone
-[완료] Docker / Docker Compose 설치
-[완료] MySQL Docker 구성
-[완료] MySQL 데이터 Volume 구성
-[완료] SSH Tunnel을 이용한 외부 DB 개발 환경 구성
-
-[진행 예정] Spring Boot Dockerfile 작성
-[진행 예정] Spring Boot Docker Compose 연결
-[진행 예정] Spring Boot ↔ MySQL 연결
-[진행 예정] Backend API 외부 접근 구성
-```
+인증 후 DB 저장·조회, 실제 STOMP 송수신, Gemini 응답, 서버 기동·배포 및 실기기 실행은 확인하지 않았습니다. 서버 기동과 DB 변경은 수행하지 않았습니다. [기능별 현황](../requirements/requirements.md)을 참고하세요.
