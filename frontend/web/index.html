@@ -41,6 +41,10 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <!-- Keep the loader in the revalidated HTML so an older cached loader cannot
+       select a previous app bundle after deployment. -->
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
 </body>
 </html>
